@@ -1,0 +1,101 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 362ae749f75dd22948df1b9674ae8e4228d01c7abb8d7966c693735ff542ba99
+
+name:           opt-expect
+version:        0.1.0.0
+synopsis:       Optimizing Expectations with Policy Gradients - Based on John Schulmann's Thesis
+description:    Please see the README on GitHub at <https://github.com/faezs/optExpect#readme>
+category:       Machine Learning
+homepage:       https://github.com/faezs/optExpect#readme
+bug-reports:    https://github.com/faezs/optExpect/issues
+author:         Faez Shakil
+maintainer:     faez.shakil@gmail.com
+copyright:      2019 Faez Shakil
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/faezs/optExpect
+
+library
+  exposed-modules:
+      AD.SimpleEssence
+      DDQN
+      Env
+      Lib
+      SCG.Graph
+  other-modules:
+      Paths_opt_expect
+  hs-source-dirs:
+      src
+  build-depends:
+      MonadRandom
+    , algebraic-graphs
+    , backprop
+    , base >=4.7 && <5
+    , concat-classes
+    , concat-examples
+    , concat-inline
+    , concat-known
+    , concat-plugin
+    , containers
+    , hmatrix
+    , vector
+  default-language: Haskell2010
+
+executable opt-expect-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_opt_expect
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -fplugin=Concat.Plugin -O2
+  build-depends:
+      MonadRandom
+    , algebraic-graphs
+    , backprop
+    , base >=4.7 && <5
+    , concat-classes
+    , concat-examples
+    , concat-inline
+    , concat-known
+    , concat-plugin
+    , containers
+    , hmatrix
+    , opt-expect
+    , vector
+  default-language: Haskell2010
+
+test-suite opt-expect-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_opt_expect
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      MonadRandom
+    , algebraic-graphs
+    , backprop
+    , base >=4.7 && <5
+    , concat-classes
+    , concat-examples
+    , concat-inline
+    , concat-known
+    , concat-plugin
+    , containers
+    , hmatrix
+    , opt-expect
+    , vector
+  default-language: Haskell2010

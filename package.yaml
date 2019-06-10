@@ -1,0 +1,66 @@
+name:                opt-expect
+version:             0.1.0.0
+github:              "faezs/optExpect"
+license:             BSD3
+author:              "Faez Shakil"
+maintainer:          "faez.shakil@gmail.com"
+copyright:           "2019 Faez Shakil"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+synopsis:            Optimizing Expectations with Policy Gradients - Based on John Schulmann's Thesis
+category:            Machine Learning
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/faezs/optExpect#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- backprop
+- hmatrix
+- MonadRandom
+- vector
+- containers
+- algebraic-graphs
+- concat-classes
+- concat-examples
+- concat-plugin
+- concat-inline
+- concat-known
+#- accelerate
+#- accelerate-llvm-ptx
+#- accelerate-llvm-native
+#- mwc-random-accelerate
+#- linear-accelerate
+
+library:
+  source-dirs: src
+
+executables:
+  opt-expect-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -fplugin=Concat.Plugin
+    - -O2
+    dependencies:
+    - opt-expect
+
+tests:
+  opt-expect-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - opt-expect
