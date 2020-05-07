@@ -21,22 +21,17 @@ description:         Please see the README on GitHub at <https://github.com/faez
 
 dependencies:
 - base >= 4.7 && < 5
-- backprop
 - hmatrix
 - MonadRandom
 - vector
 - containers
-- algebraic-graphs
-- concat-classes
+- vector-space
 - concat-examples
+- concat-classes
 - concat-plugin
-- concat-inline
-- concat-known
-#- accelerate
-#- accelerate-llvm-ptx
-#- accelerate-llvm-native
-#- mwc-random-accelerate
-#- linear-accelerate
+- ghc-prim
+- mtl
+- monad-bayes
 
 library:
   source-dirs: src
@@ -49,7 +44,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -fplugin=Concat.Plugin
+    - -fplugin=ConCat.Plugin
     - -O2
     dependencies:
     - opt-expect

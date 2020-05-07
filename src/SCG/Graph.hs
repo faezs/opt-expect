@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 
 module SCG.Graph () where
-
+{--
 import GHC.TypeLits
 import Algebra.Graph
 import Backprop
@@ -84,7 +84,7 @@ ddtheta_expect_over_z_from_pOfTheta_f_of_x_of_z_theta p f x z theta =
     - Nodes arranged in parallel lead to sums over mulplicative terms
     - 
 --}
-
+{--
 data Node a = InputNode a | DeterministicNode a | StochasticNode a
 
 newtype InputNode a = IO a
@@ -97,7 +97,7 @@ data DirectedEdge a = DirectedEdge
   { _v :: Node,
     _w :: DeterministicNode | StochasticNode
   }
-
+--}
 
 
 -- TODO: Create a directed acyclic graph DS using alga
@@ -105,3 +105,4 @@ data DirectedEdge a = DirectedEdge
 -- TODO: Add backprop for folds over the deterministic nodes? derive an instance of Backprop for edges?
 -- TODO: Add the right gradient estimation procedure for combinations of deterministic and stochastic nodes
 -- TODO: Figure out how to do dataflow programming over the Graph
+--}

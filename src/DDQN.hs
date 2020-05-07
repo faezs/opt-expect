@@ -3,13 +3,14 @@
 module DDQN where
 
 import Prelude hiding ((<>))
-import ConCat.Deep (trainNTimes, lr3, (--+))
+import GHC.Generics ((:*:))
+import ConCat.Deep
 import ConCat.Additive
 import ConCat.AltCat ()
 import ConCat.Rebox ()
 import ConCat.AltCat (Additive1(..))
-import Numeric.LinearAlgebra hiding (Additive)
-import ConCat.Misc ((:*))
+import Numeric.LinearAlgebra hiding (Additive, R)
+import ConCat.Misc ((:*), R)
 
 {--
 data NetOpts = NetOpts
@@ -21,13 +22,17 @@ data NetOpts = NetOpts
   }
 --}
 
+{--
+A VECTORSPACE IS A ZIPPABLE FUNCTOR
+
+
 genTrainData :: Int -> [(Vector R :* Vector R)]
 genTrainData nEx = xy
   where xy = map (\i-> (x i, y i)) [1..nEx]
         x = (\i->vector [1..(fromIntegral 100)])
         y = (\i-> vector [1])
 
-getNetworkParams :: Int -> (Int, Int) -> Int -> (a --* b)
+getNetworkParams :: Int -> (Int, Int) -> Int -> [Matrix R]
 getNetworkParams nLayers wDim nOut = ls ++ [outL]
   where
     ls = map (\i -> layer wDim) [1..nLayers]
@@ -53,6 +58,7 @@ run = trainNTimes nEpoch lr lr3 netParams xys
         nEpoch = 10
         lr = 0.003
         xys = genTrainData 2000
+--}
 -- putStrLn "Trained Several Times!"
 
 {--

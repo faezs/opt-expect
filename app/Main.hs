@@ -1,6 +1,14 @@
 module Main where
 
-import Lib
+--import Lib
+
+import CartPole
+
 
 main :: IO ()
-main = someFunc
+main = do
+  x <- initCPIO
+  let
+    ts = runCPEpisode x (\_ -> PushLeft)
+  putStrLn $ show ts
+  

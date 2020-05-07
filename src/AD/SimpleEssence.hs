@@ -1,5 +1,9 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 module AD.SimpleEssence where
 
+import Prelude hiding ((.), id)
 {--
 
 Multiple notions of derivatives, each has a chain rule:
@@ -14,8 +18,12 @@ A derivative is a:
 
 
 -- What is a derivative? It's a linear transformation (linear transformation might be a matrix)
-D :: (a -> b) -> (a -> (a -o b))
+{--
+data a -^ b
+  
+newtype D a b = D (a -> b) -> (a -> (a - b))
 
+d = undefined
 -- (-o) is a linear map
 -- consumes a function a to b, produces a function a to linear-map (a to b)
 
@@ -27,15 +35,15 @@ D :: (a -> b) -> (a -> (a -o b))
 -- multiplication is really there because it correctly implements composition
 
 -- Sequential Composition (Chain Rule):
-(o) :: (b -> c) -> (a -> b) -> (a -> c)
-(g `compose` f) a = g (f a)
+(.) :: (b -> c) -> (a -> b) -> (a -> c)
+(g . f) a = g (f a)
 
-D (g `compose` f) a = D g (f a) `compose` D f a  -- chain rule
+D (g . f) a = D g (f a) . D f a  -- chain rule
 
 
 -- Parallel Composition: (Same input) Semantically Parallel, no data dependencies
 -- x here is a cross-product? Represents a tuple?
-fork :: (a -> c) (a -> d) -> (a -> (c x d))
+fork :: (a -> c) (a -> d) -> (a -> (c, d))
 (f `fork` g) a = (f a, g a)
 
 D (f `fork` g) a = D f a `fork` D g a
@@ -65,29 +73,31 @@ D` f a = (f a, f)
 -- Sequential and Parallel Composition
 
 -- ~> means something is function-like, has a domain and co-domain
-class Category (~>) where
-  id :: a ~> a
-  (o) :: (b ~> c) -> (a ~> b) -> (a ~> c)
+class Category k where
+  id :: a `k` a
+  (.) :: (a `k` c) -> (a `k` b) -> (a `k` c)
 
 -- Laws:
 -- Composition is Associative
 -- Identity is left and right identity
 
 -- More specialized category: has a notion of products or pairs (x)
-class Category (~>) => Cartesian (~>) where
-  exl :: (a, b) ~> a -- fst
-  exr :: (a, b) ~> b -- snd
-  fork :: (a ~> c) -> (a ~> d) -> (a ~> (c, d)) -- domain to pair result
+class Category (k) => Cartesian (k) where
+  exl :: (a, b) `k` a -- fst
+  exr :: (a, b) `k` b -- snd
+  fork :: (a `k` c) -> (a `k` d) -> (a `k` (c, d)) -- domain to pair result
 -- Laws:
 
 
 
 
 -- type of differentible functions from a to b
-newtype D a b = D (a -> (b, (a -o b)))
-D' :: (a -> b) -> D a b
+newtype a ~> b = D (a -> b)
+
+--newtype D a b = D (a -> (b, (a ~> b)))
+--d' :: (a -> b) -> D a b
 -- this specification is not computable
-D' f = D (f `fork` D f)
+--d' f = D (f `fork` D f)
 
 -- How do we transform the specification to an implementation?
 
@@ -95,20 +105,23 @@ D' f = D (f `fork` D f)
 -- We Require D` to preserve Category and Cartesian structure!
 -- In the following, right hand side terms are functions, left hand side terms are DIFFERENTIABLE FUNCTIONS)
 -- Category structure :
-D' id = id
-D' (g `compose` f) = D' g `compose` D' f
+instance Category (~>) where
+  id =  D . id
+  g . f =  D g . D f
 -- Cartesian structure:
-D' exl = exl
-D' exr = exr
-D' (f `fork` g) = D' f (`fork`) D' g
+
+instance Cartesian (~>) where
+  exl = exl
+  exr = exr
+  f `fork` g = D f `fork` D g
 
 -- WE HAVE TO SOLVE THESE EQUATIONS FOR THE RHS
 -- WHICH IS:
 -- ALL THESE TYPES REQUIRE VECTOR-SPACES
-newtype D a b = D (a -> (b x (a -o b)))
+--newtype D a b = D (a -> (b x (a -o b)))
 
 linearD f = D (\a -> (f a, a))
-
+{--
 instance Category D where
   id = linearD id
   D g `compose` D f = D (\a -> let {(b, f') = f a;
@@ -119,10 +132,9 @@ instance Cartesian D where
   exl = linearD exl
   exr = linearD exr
   D f `fork` D g = D (\a ->
-                        let {
+                        let
                           (b, f') = f a
                           (c, g') = g a
-                          }
                         in ((b,c), f' `fork` g'))
 
 instance NumCat D where
@@ -132,18 +144,18 @@ instance NumCat D where
               \(a, b) ->
                 \(da, db) ->     -- THIS IS JUST A LINEAR MAP
                   b * da + a * db))
-
+--}
 
 -- EXAMPLES:
 
-sqr :: Num a => a -> a
-sqr a = a * a
+sqr' :: Num a => a -> a
+sqr' a = a * a
 
-magSqr :: Num a => a x a -> a
-magSqr (a,b) = sqr a + sqr b
+magSqr' :: Num a => (a, a) -> a
+magSqr' (a,b) = sqr a + sqr b
 
-cosSinProd :: Floating a => a x a -> a x a
-cosSinProd (x, y) = (cos z, sin z) where z = x * y
+cosSinProd' :: Floating a => (a, a) -> (a, a)
+cosSinProd' (x, y) = (cos z, sin z) where z = x * y
 
 -- HOW DO WE RE-WRITE IN CATEGORICAL VOCABULARY
 -- Computation, Logic and the foundation of mathematics are all the same thing
@@ -153,3 +165,4 @@ cosSinProd (x, y) = (cos z, sin z) where z = x * y
 sqr = mul `compose` (id `fork` id)
 magSqr = add `compose` (mul `compose` (exl `fork` exl) `fork` mul `compose` (exr `fork` exr))
 cosSinProd = (cos `fork` sin) `compose` mul
+--}

@@ -17,7 +17,7 @@
 #
 # resolver: ./custom-snapshot.yaml
 # resolver: https://example.com/snapshots/2018-01-01.yaml
-resolver: lts-13.23
+resolver: lts-14.10
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -50,20 +50,20 @@ extra-deps:
       - hardware
       - graphics
       - examples
-  # Accelerate Specific Deps
-#  - accelerate-llvm-1.2.0.1@sha256:e794b1abfea5424671d84d5d69bb9ccf468af9adaa481f9adaa78c42538a9cda
-#  - llvm-hs-8.0.0@sha256:bca4c990e355cb4d2ed02d22dd076fe84ffc76f7b5330797c54ff449037a9efc
-#  - tasty-hedgehog-1.0.0.1@sha256:cdcf60a29195bd0d819d3018c11db2e0deb7c6e559ad940c49409a5a7a982f83
-#  - accelerate-1.2.0.1@sha256:bb1928efe602545df4043692916ed427c959110cbd678d03c3f9c3be25d1ae88
-#  - accelerate-llvm-native-1.2.0.1@sha256:d98c01bc08c6923270e50c5f032f3f816ceee4daddee98ced6e2f2440889f03f
-#  - accelerate-llvm-ptx-1.2.0.1@sha256:0ddd8f0f8a379a400dd82ad01c319fa4b13a64146b4e05beed5c486f1f2269f7
-#  - linear-accelerate-0.6.0.0@sha256:3b85a8c8e4effe1438fb8cf15af13dcfffc1271e21af607ba16dc2ea2f96c1e9
-#  - mwc-random-accelerate-0.1.0.0@sha256:2c1a16f145e57d743981f9ee61b55e6fff9717e6fd878769e92e45caeae8fda8
-#  - hedgehog-1.0@sha256:1437173d3fa562dcc454ef996f2dd41cd0e004ccbcf15e6e73dcd6f247db50ac
-#  - llvm-hs-pure-8.0.0@sha256:8ccfdbbf0a5678f56d88f3e623da8e0e2937439988e06021cfd6874adf29226c
+  - git: git@github.com:tweag/monad-bayes.git
+    commit: 10a5ea4d6f1eb72ff4e2a5978485e93a48db061d
+    subdirs:
+      - .
+
+#  - git: git@github.com:hasktorch/hasktorch.git
+#    commit: 61eccc61ddf1b6334bfd6e8344620006174b1bef
+#    subdirs:
+#      - .
 
 # Override default flag values for local packages and extra-deps
-# flags: {}
+#flags:
+#  llvm-hs:
+#    shared-llvm: true
 
 # Extra package databases containing global packages
 # extra-package-dbs: []

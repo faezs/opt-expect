@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.2.
+-- This file has been generated from package.yaml by hpack version 0.33.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 362ae749f75dd22948df1b9674ae8e4228d01c7abb8d7966c693735ff542ba99
+-- hash: 7e0e96515ab8d1aee670c70edfe1e3f864f046b9cc4c9080e9b024d6520bece0
 
 name:           opt-expect
 version:        0.1.0.0
@@ -30,8 +30,8 @@ source-repository head
 library
   exposed-modules:
       AD.SimpleEssence
+      CartPole
       DDQN
-      Env
       Lib
       SCG.Graph
   other-modules:
@@ -40,17 +40,17 @@ library
       src
   build-depends:
       MonadRandom
-    , algebraic-graphs
-    , backprop
     , base >=4.7 && <5
     , concat-classes
     , concat-examples
-    , concat-inline
-    , concat-known
     , concat-plugin
     , containers
+    , ghc-prim
     , hmatrix
+    , monad-bayes
+    , mtl
     , vector
+    , vector-space
   default-language: Haskell2010
 
 executable opt-expect-exe
@@ -59,21 +59,21 @@ executable opt-expect-exe
       Paths_opt_expect
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -fplugin=Concat.Plugin -O2
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -fplugin=ConCat.Plugin -O2
   build-depends:
       MonadRandom
-    , algebraic-graphs
-    , backprop
     , base >=4.7 && <5
     , concat-classes
     , concat-examples
-    , concat-inline
-    , concat-known
     , concat-plugin
     , containers
+    , ghc-prim
     , hmatrix
+    , monad-bayes
+    , mtl
     , opt-expect
     , vector
+    , vector-space
   default-language: Haskell2010
 
 test-suite opt-expect-test
@@ -86,16 +86,16 @@ test-suite opt-expect-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       MonadRandom
-    , algebraic-graphs
-    , backprop
     , base >=4.7 && <5
     , concat-classes
     , concat-examples
-    , concat-inline
-    , concat-known
     , concat-plugin
     , containers
+    , ghc-prim
     , hmatrix
+    , monad-bayes
+    , mtl
     , opt-expect
     , vector
+    , vector-space
   default-language: Haskell2010
