@@ -1,3 +1,6 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 module CartPole where
@@ -7,7 +10,11 @@ import Control.Monad.State.Lazy
 import Control.Monad.Bayes.Class
 import Control.Monad.Bayes.Sampler
 
+import Utils
+import qualified Data.Vector.Sized as VS
+import Data.Maybe (fromJust)
 
+import Debug.Trace
 {---------------------
 
 A pole is attached by an unactuated joint to a cart, which moves along a frictionless track.
@@ -71,22 +78,33 @@ cartPoleDef = CPConf
   , totalMass = (1 + 0.1)
   , poleHalfLength = 0.5
   , poleMassLength = (0.1 * 0.5)
-  , forceMag = 10
-  , secondsBetweenUpdates = 0.02
+  , forceMag = 1
+  , secondsBetweenUpdates = 10
   , thetaThreshold = 12
   , xThreshold = 2.4
   }
 
 
 data CPState = CPState
-  { x :: R  -- cart position
+  { cpX:: R  -- cart position
   , xdot :: R -- cart velocity
   , theta :: R -- pole angle
   , thetadot :: R -- pole velocity
   } deriving (Eq, Ord, Show)
 
+instance HasV CPState 4 where
+  toV CPState{..} = fromJust $ VS.fromList @4 [cpX, xdot, theta, thetadot]
+  fromV v = CPState{..}
+    where cpX:xdot:theta:thetadot:[] = VS.toList v
+
 data CPAct = PushLeft | PushRight deriving (Eq, Ord, Show)
 
+instance HasV CPAct 2 where
+  toV PushLeft = fromJust $ VS.fromList @2 [1, 0]
+  toV PushRight = fromJust $ VS.fromList @2 [0, 1]
+  fromV v = if x > y then PushLeft else PushRight
+    where
+      x:y:[] = VS.toList v
 
 type EnvState s r = State s r
 
@@ -100,13 +118,30 @@ data Transition s a r = Transition
 
 type CPTrans = Transition CPState CPAct R
 
+dynamicsCP :: CPConf -> R -> CPState -> CPState
+dynamicsCP CPConf{..} force s@CPState{..} = CPState
+      { cpX = cpX + (secondsBetweenUpdates * xdot)
+      , xdot = xdot + (secondsBetweenUpdates * xAcc)
+      , theta = theta + (secondsBetweenUpdates * thetadot)
+      , thetadot = thetadot + (secondsBetweenUpdates * thetaAcc)
+      }
+      where
+        thetaAcc = (gravity * sinTh - cosTh * temp) / d 
+          where
+            d = (poleHalfLength * ((4/3) - massPole * (cosTh ^2))) / totalMass
+        xAcc = (temp - poleMassLength * thetaAcc * cos theta) / totalMass
+        temp =  (force + poleMassLength * (thetadot ^ 2) * sinTh) / totalMass
+        cosTh = cos theta
+        sinTh = sin theta
+
 stepCP :: CPConf -> (CPState -> CPAct) -> EnvState CPState CPTrans
 stepCP c@CPConf{..} actor = do
   st <- get
   let
     act = actor st
-    force = if act == PushRight then forceMag else (- forceMag)
-    st' = delSt force st
+    force PushRight = forceMag
+    force PushLeft = (- forceMag)
+    st' = dynamicsCP c (force act) st
     d = done st'
     r = reward
   put st'
@@ -115,27 +150,22 @@ stepCP c@CPConf{..} actor = do
     reward :: R
     reward = 1
     done :: CPState -> Bool
-    done CPState {..} = x < (- xThreshold)
-      || x > (xThreshold)
+    done CPState {..} = cpX< (- xThreshold)
+      || cpX > (xThreshold)
       || theta < (- thetaThreshold)
       || theta > (thetaThreshold)
-    delSt :: R -> CPState -> CPState
-    delSt force s@CPState{..} = undefined
-      where
-        thetaAcc = (gravity * sinTh - cosTh * temp) / d 
-          where
-            d = poleHalfLength * ((4/3) - massPole * cosTh * cosTh / totalMass)
-        xAcc = temp - poleMassLength * thetaAcc * cos theta / totalMass
-        temp =  force + poleMassLength * thetadot * thetadot * sinTh / totalMass
-        cosTh = cos theta
-        sinTh = sin theta
+    
 
+stepsCP conf act = mapM (\_ -> stepCP conf act) [1..]
 
 runCP :: CPState -> (CPState -> CPAct) -> [CPTrans]
-runCP initState actor = repeat $ evalState (stepCP cartPoleDef actor) initState
+runCP initState actor = evalState (stepsCP cartPoleDef actor) initState
 
 runEpisode :: (s -> (s -> a) -> [Transition s a r]) -> s -> (s -> a) -> [Transition s a r]
-runEpisode r i a = (takeWhile (\Transition{done} -> done)) $ r i a
+runEpisode r i a = (takeWhileInclusive (\Transition{done} -> not done)) $ r i a
+  where
+    takeWhileInclusive _ [] = []
+    takeWhileInclusive p (x:xs) = x : if p x then takeWhileInclusive p xs else []
 
 runCPEpisode :: CPState -> (CPState -> CPAct) -> [CPTrans]
 runCPEpisode i a = runEpisode runCP i a
@@ -150,6 +180,11 @@ initCP = CPState <$> dist <*> dist <*> dist <*> dist
 initCPIO :: IO CPState
 initCPIO = sampleIOfixed initCP
 
+runCPEpisodeIO :: (CPState -> CPAct) -> IO [CPTrans]
+runCPEpisodeIO a = do
+  i <- initCPIO
+  ts <- return $ runCPEpisode i a
+  return $ ts
 --type Agent m s a = StateT (s -> a) m 
 
 dumbAgent :: CPState -> State Int CPAct
@@ -159,5 +194,3 @@ dumbAgent _ = do
     a = if (mod i 2 == 0) then PushLeft else PushRight
   put (i + 1)
   return $ a
-
-dA = evalState

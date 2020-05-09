@@ -32,6 +32,8 @@ dependencies:
 - ghc-prim
 - mtl
 - monad-bayes
+- vector-sized
+- random
 
 library:
   source-dirs: src
