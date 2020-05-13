@@ -13,8 +13,6 @@ import Control.Monad.Bayes.Sampler
 import Utils
 import qualified Data.Vector.Sized as VS
 import Data.Maybe (fromJust)
-
-import Debug.Trace
 {---------------------
 
 A pole is attached by an unactuated joint to a cart, which moves along a frictionless track.
@@ -78,9 +76,9 @@ cartPoleDef = CPConf
   , totalMass = (1 + 0.1)
   , poleHalfLength = 0.5
   , poleMassLength = (0.1 * 0.5)
-  , forceMag = 1
-  , secondsBetweenUpdates = 10
-  , thetaThreshold = 12
+  , forceMag = 10
+  , secondsBetweenUpdates = 0.02
+  , thetaThreshold = 24
   , xThreshold = 2.4
   }
 
@@ -97,7 +95,7 @@ instance HasV CPState 4 where
   fromV v = CPState{..}
     where cpX:xdot:theta:thetadot:[] = VS.toList v
 
-data CPAct = PushLeft | PushRight deriving (Eq, Ord, Show)
+data CPAct = PushLeft | PushRight deriving (Eq, Ord, Show, Enum)
 
 instance HasV CPAct 2 where
   toV PushLeft = fromJust $ VS.fromList @2 [1, 0]
@@ -118,19 +116,31 @@ data Transition s a r = Transition
 
 type CPTrans = Transition CPState CPAct R
 
+toRad n = n * (pi / 180)
+
+-- $ cartpole dynamics without friction
 dynamicsCP :: CPConf -> R -> CPState -> CPState
-dynamicsCP CPConf{..} force s@CPState{..} = CPState
+dynamicsCP CPConf{..} f s@CPState{..} = CPState
       { cpX = cpX + (secondsBetweenUpdates * xdot)
-      , xdot = xdot + (secondsBetweenUpdates * xAcc)
+      , xdot = xdot + (secondsBetweenUpdates * x'')
       , theta = theta + (secondsBetweenUpdates * thetadot)
-      , thetadot = thetadot + (secondsBetweenUpdates * thetaAcc)
+      , thetadot = thetadot + (secondsBetweenUpdates * t'')
       }
       where
-        thetaAcc = (gravity * sinTh - cosTh * temp) / d 
+        --nC = ((massCart + massPole) * gravity)
+        --     - (massPole * poleHalfLength *
+        --        (t'' * sinTh + (thetadot * thetadot * cosTh)))
+        tMass = massCart + massPole
+        t'' = num / denom
           where
-            d = (poleHalfLength * ((4/3) - massPole * (cosTh ^2))) / totalMass
-        xAcc = (temp - poleMassLength * thetaAcc * cos theta) / totalMass
-        temp =  (force + poleMassLength * (thetadot ^ 2) * sinTh) / totalMass
+            num = (gravity * sinTh)
+              + (cosTh *
+                 (((- f)
+                   -
+                   (massPole * poleHalfLength * (thetadot * thetadot) * sinTh))
+                  / tMass))
+            denom = poleHalfLength * ((4/3) - ((massPole * (cos cosTh)) / tMass))
+        x'' = ((f + (massPole * poleHalfLength * ((thetadot * thetadot * sinTh) - (t'' * cosTh)))) / tMass)
         cosTh = cos theta
         sinTh = sin theta
 
@@ -150,9 +160,9 @@ stepCP c@CPConf{..} actor = do
     reward :: R
     reward = 1
     done :: CPState -> Bool
-    done CPState {..} = cpX< (- xThreshold)
+    done CPState {..} = cpX < (- xThreshold)
       || cpX > (xThreshold)
-      || theta < (- thetaThreshold)
+      || theta < (- (thetaThreshold))
       || theta > (thetaThreshold)
     
 
@@ -178,7 +188,7 @@ initCP = CPState <$> dist <*> dist <*> dist <*> dist
     dist = uniform (-0.5) 0.5
 
 initCPIO :: IO CPState
-initCPIO = sampleIOfixed initCP
+initCPIO = sampleIO initCP
 
 runCPEpisodeIO :: (CPState -> CPAct) -> IO [CPTrans]
 runCPEpisodeIO a = do
