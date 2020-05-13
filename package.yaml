@@ -34,7 +34,9 @@ dependencies:
 - monad-bayes
 - vector-sized
 - random
-
+- stm
+- finite-typelits
+- keys
 library:
   source-dirs: src
 

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b4ff42f99330de6aba041e508c0e68f3be14546084ed811a50b4ed459ec67f39
+-- hash: 9ca02bb19f024df98e969d30a56568efc3a0b51bd264fcef654e0c1add6c3cb3
 
 name:           opt-expect
 version:        0.1.0.0
@@ -47,11 +47,14 @@ library
     , concat-examples
     , concat-plugin
     , containers
+    , finite-typelits
     , ghc-prim
     , hmatrix
+    , keys
     , monad-bayes
     , mtl
     , random
+    , stm
     , vector
     , vector-sized
     , vector-space
@@ -71,12 +74,15 @@ executable opt-expect-exe
     , concat-examples
     , concat-plugin
     , containers
+    , finite-typelits
     , ghc-prim
     , hmatrix
+    , keys
     , monad-bayes
     , mtl
     , opt-expect
     , random
+    , stm
     , vector
     , vector-sized
     , vector-space
@@ -98,12 +104,15 @@ test-suite opt-expect-test
     , concat-examples
     , concat-plugin
     , containers
+    , finite-typelits
     , ghc-prim
     , hmatrix
+    , keys
     , monad-bayes
     , mtl
     , opt-expect
     , random
+    , stm
     , vector
     , vector-sized
     , vector-space
