@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9ca02bb19f024df98e969d30a56568efc3a0b51bd264fcef654e0c1add6c3cb3
+-- hash: ea4fbda7dad5a000ee1a382b0a225296c468d3021dba18a92d5598a62ec21760
 
 name:           opt-expect
 version:        0.1.0.0
@@ -32,7 +32,9 @@ library
       AD.SimpleEssence
       CartPole
       DDQN
+      Env
       Lib
+      Policy
       PPO
       SCG.Graph
       Utils
@@ -43,6 +45,7 @@ library
   build-depends:
       MonadRandom
     , base >=4.7 && <5
+    , comonad
     , concat-classes
     , concat-examples
     , concat-plugin
@@ -55,6 +58,7 @@ library
     , mtl
     , random
     , stm
+    , streamly >=0.7.2
     , vector
     , vector-sized
     , vector-space
@@ -66,10 +70,11 @@ executable opt-expect-exe
       Paths_opt_expect
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -fplugin=ConCat.Plugin -O2
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -fplugin=ConCat.Plugin -fplugin=Fusion.Plugin -O2
   build-depends:
       MonadRandom
     , base >=4.7 && <5
+    , comonad
     , concat-classes
     , concat-examples
     , concat-plugin
@@ -83,6 +88,7 @@ executable opt-expect-exe
     , opt-expect
     , random
     , stm
+    , streamly >=0.7.2
     , vector
     , vector-sized
     , vector-space
@@ -100,6 +106,7 @@ test-suite opt-expect-test
   build-depends:
       MonadRandom
     , base >=4.7 && <5
+    , comonad
     , concat-classes
     , concat-examples
     , concat-plugin
@@ -113,6 +120,7 @@ test-suite opt-expect-test
     , opt-expect
     , random
     , stm
+    , streamly >=0.7.2
     , vector
     , vector-sized
     , vector-space

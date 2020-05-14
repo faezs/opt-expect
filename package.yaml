@@ -37,6 +37,8 @@ dependencies:
 - stm
 - finite-typelits
 - keys
+- comonad
+- streamly >= 0.7.2
 library:
   source-dirs: src
 
@@ -49,6 +51,7 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     - -fplugin=ConCat.Plugin
+    - -fplugin=Fusion.Plugin 
     - -O2
     dependencies:
     - opt-expect
