@@ -1,3 +1,7 @@
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -25,7 +29,11 @@ import Utils
 import qualified Streamly.Prelude as S
 import Streamly
 
-type EnvState s r = State s r
+import Control.Monad.Bayes.Sampler
+
+type MonadEnv m = (MonadSample m, MonadAsync m)
+
+type EnvState m s r = (MonadSample m) => StateT s m r
 
 data Transition s a r = Transition
   { s_t :: s
@@ -33,58 +41,77 @@ data Transition s a r = Transition
   , a_t :: a
   , rw :: r
   , done :: Bool
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Ord, Show, Generic)
 
 
 
-data Episode f s a r = Episode
+data Episode s a r = Episode
   { timesteps :: Int
   , reward :: r
-  , trajectories :: f (Transition s a r)
-  } deriving (Generic)
+  , trajectories :: [Transition s a r]
+  , rewardToGo :: [r]
+  } deriving (Eq, Ord, Show, Generic)
 
+instance Num r => Semigroup (Episode s a r) where
+  a <> b = Episode
+           { timesteps = timesteps a + timesteps b
+           , reward = reward a + reward b
+           , trajectories = trajectories a <> trajectories b
+           , rewardToGo = rewardToGo a <> rewardToGo b
+           }
+
+instance Num r => Monoid (Episode s a r) where
+  mempty = Episode 0 0 [] []
 
 runEpisode ::
-  ( MonadSample m
-  , Additive r
-  , Applicative f
-  , Foldable f
-  , Traversable f)
-  => (s -> (s -> m a) -> m (Transition s a r))
+  forall m s a r.
+  ( Additive r,
+    MonadSample m,
+    Num r
+  )
+  => ((s -> m a) -> EnvState m s (Transition s a r))
   -> (s -> m a)
   -> s
-  -> m (Episode f s a r)
-runEpisode env agent initS = Episode
-                             { timesteps = length txs
-                             , reward = sumA (S.map rw txs)
-                             , trajectories = txs }
+  -> m (Episode s a r)
+runEpisode stepFn agent initS = do
+  txs <- (takeWhileInclusive (\tx -> not . done $ tx))
+           <$> (evalStateT (mapM (\_ -> stepFn agent) [1..200]) $ initS)
+  return $ Episode
+    { timesteps = length txs
+    , reward = sumA (fmap rw txs)
+    , trajectories = txs
+    , rewardToGo = rTG txs 
+    }
   where
-    txs :: m (f (Transition s a r))
-    txs = S.takeWhile (\Transition{done} -> done) $ S.iterateM (env initS agent)
-    -- (takeWhileInclusive (\Transition{done} -> not done)) $ 
+    rTG xs = (\r -> totalR - r)
+                   <$> (scanl (\rAtT Transition{rw} -> rAtT + rw) 0 xs)
+      where
+        totalR = sumA (fmap rw xs)
     takeWhileInclusive _ [] = []
     takeWhileInclusive p (x:xs) = x : if p x then takeWhileInclusive p xs else []
+{-# INLINE runEpisode #-}
 
 
-runEps :: (Functor f, Foldable f, Zip f,
-           KnownNat o, KnownNat h, KnownNat i,
-           HasV s i, HasV a o, Enum a, IsStream t)
-       => (s -> (s -> m a) -> t m (Transition s a R)) -- Environment
-       -> Int -- number of episodes
-       -> s -- initial state of the environment
-       -> p i h o -- parameters with an input size i, output size o
-       -> t m (p i h o) -- list of parameters for the run
-runEps = \learner runEp n initS startPs -> S.take n <$> S.iterateM (\p -> learner (rollOut runEp initS p)) startPs
--- (flip (pgUpdate 0.1) p)
-{-# INLINE runEps #-}
+
+agentEpisode :: forall m p s a r i h o. (MonadSample m, HasV s i, HasV a o, KnownNat h)
+       => (Episode s a r -> p i h o -> p i h o)       -- Learner
+       -> (p i h o -> s -> m a)                       -- Agent
+       -> (s -> (s -> m a) -> m (Episode s a r))      -- Environment
+       -> Int                                         -- number of episodes
+       -> s                                           -- initial state of the environment
+       -> p i h o                                     -- initial parameters with an input size i, output size o
+       -> m (p i h o)                                 -- list of parameters for the run
+agentEpisode = \learner agent runEp n initS startPs ->
+  (liftM . flip learner $ startPs) $ rollOut agent runEp initS startPs
+{-# INLINE agentEpisode #-}
 
 
 rollOut ::
-  (MonadSample m, Functor f, Foldable f, HasV s i, HasV a o, KnownNat h)
+  (MonadSample m, HasV s i, HasV a o, KnownNat h)
   => (p i h o -> s -> m a)
-  -> (s -> (s -> m a) -> m (f (Transition s a R)))
+  -> (s -> (s -> m a) -> m (Episode s a r))
   -> s
   -> p i h o
-  -> m (f (Transition s a R))
+  -> m (Episode s a r)
 rollOut = \agent runEp initS startPs -> runEp initS (agent startPs)
 {-# INLINE rollOut #-}
