@@ -21,9 +21,9 @@ import Data.Foldable
 import ConCat.Deep
 import ConCat.Misc
 import ConCat.Rebox  -- Necessary for reboxing rules to fire
-import ConCat.AltCat (fromIntegralC, sumAC, Additive1, (<+), additive1)  -- Necessary, but I've forgotten why.
+import ConCat.AltCat (forkF, fork, fromIntegralC, sumAC, Additive1, (<+), additive1)  -- Necessary, but I've forgotten why.
 import ConCat.RAD (gradR)
-import ConCat.Additive
+import ConCat.Additive ((^+^), Additive, sumA)
 import ConCat.Sized
 
 import qualified Data.Vector.Sized as VS
@@ -35,44 +35,51 @@ import GHC.Generics hiding (R)
 import GHC.TypeLits
 import Data.Finite
 
-import CartPole
 import Utils
-import Control.Monad.Bayes.Class
+import Control.Monad.Bayes.Class (MonadSample)
 import Policy
+import Env
 
 
-type PType i h o = ((V h --+ V o) :*: (V h --+ V h) :*: (V h --+ V h) :*: (V i --+ V h)) R
+type PType i h o = ((V h --+ V o) :*: (V h --+ V h) :*: (V i --+ V h)) R
 
---softmax :: (KnownNat i, KnownNat o) => R -> Unop ((V i --> V o) R)
 softmax :: (Functor f, Functor g, Foldable g, Fractional s, Floating s, Additive s) => Unop (f (g s))
 softmax = (normalize <$>) . ((fmap.fmap) (\a -> exp a))
 {-# INLINE softmax #-}
 
 policy :: (KnownNat i, KnownNat h, KnownNat o) => PType i h o -> (V i --> V o) R
-policy = softmax . (affine @. lr3')  -- Defined in ConCat.Deep.
+policy = lr3'  -- Defined in ConCat.Deep.
 {-# INLINE policy #-}
 
-catAgent :: (MonadSample m, HasV s i, HasV a o, Enum a, KnownNat h) => PType i h o -> s -> m a
-catAgent = \ps s -> toEnum <$> (sampleCat . VS.fromSized . (policy ps) . toV) s
+catAgent :: forall m i h o s a. (MonadSample m, HasV s i, HasV a o, Enum a, KnownNat h) => PType i h o -> s -> m a
+catAgent = \ps s -> toEnum <$> (sampleCat . (softmax . policy $ ps) . toV) s
 {-# INLINE catAgent #-}
 
-pgUpdate :: forall f i h o a s. (Functor f, Foldable f, Zip f, KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i, Enum a) => R -> f (Transition s a R) -> PType i h o -> PType i h o
-pgUpdate = \lr transitions params -> params ^-^ (lr *^ compose (txLoss transitions) params)
-{-# INLINE pgUpdate #-}
+forkV :: forall i o. (KnownNat i, KnownNat o) => ((V i --> V o) R, (V i --> V o) R) -> (V i R -> (V o R, V o R)) 
+forkV = fork
+{-# INLINE forkV #-}
 
-txLoss :: (Functor f, Foldable f, Zip f, KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => f (Transition s a R) -> f (Unop (PType i h o))
-txLoss = \transitions -> (\(s, a) -> pgGrad (epReward transitions) (fromIntegralC . length $ transitions) s a) <$> (fmap (\Transition{..} -> (toV s_t, toV a_t)) transitions)
-{-# INLINE txLoss #-}
+gaussAgent :: forall m i h o s a. (MonadSample m, HasV s i, HasV a o, KnownNat h) => PType i h o -> PType i h o -> s -> m a
+gaussAgent = \mu std s -> fromV <$> (uncurry sampleGaussian) (forkV (policy mu, policy std) $ toV s)
+{-# INLINE gaussAgent #-}
 
-expectation :: (Foldable f, Functor f, Fractional a, Additive a) => f a -> a
-expectation f = (sumA f) / (fromIntegralC . length $ f)
-{-# INLINE expectation #-}
+policyGradient :: forall i h o s a. (KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => R -> Episode s a R -> PType i h o -> PType i h o
+policyGradient = \lr episode params -> params ^-^ (lr *^ ((gradLogProbExp episode) params))
+{-# INLINE policyGradient #-}
 
 
-pgGrad :: forall i h o. (KnownNat h, KnownNat i, KnownNat o) => R -> R -> V i R -> V o R -> PType i h o -> PType i h o
-pgGrad = \epR len st act params -> gradR (\ps -> (((\k-> epR * (-k)) <$> (policy @i @h @o ps) st) <.> act) / len) params
-{-# INLINE pgGrad #-}
+-- Expectation over the grad log prob for all trajectories of an episode
+gradLogProbExp :: (KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => Episode s a R -> (Unop (PType i h o))
+gradLogProbExp = \Episode{..} params ->
+  scaleV ((-1) / (fromIntegralC . length $ trajectories) :: R)
+  (sumA $ (\(s, a, rtg) -> gradLogProb (rtg) s a params)
+    <$> (fmap (\(rtg, Transition{..}) ->
+                  (toV s_t, toV a_t, rtg)) (zip rewardToGo trajectories))) 
+{-# INLINE gradLogProbExp #-}
 
-epReward :: forall f a s r. (Functor f, Foldable f) => f (Transition s a R) -> R
-epReward = sumAC . (fmap rw)
-{-# INLINE epReward #-}
+
+-- Gradient of the loss over one trajectory
+-- episode_reward * logProb of the action given policy with params on the state st
+gradLogProb :: forall i h o. (KnownNat h, KnownNat i, KnownNat o) => R -> V i R -> V o R -> PType i h o -> PType i h o
+gradLogProb = \epR st act params -> gradR (\ps -> epR * (((policy @i @h @o ps) st) <.> act)) params
+{-# INLINE gradLogProb #-}
