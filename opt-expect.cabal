@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ea4fbda7dad5a000ee1a382b0a225296c468d3021dba18a92d5598a62ec21760
+-- hash: 8683d2d9aa7c77acfa47891cfdff5e18a7f69f4846a5ea66cf75a54dc381870a
 
 name:           opt-expect
 version:        0.1.0.0
@@ -44,6 +44,7 @@ library
       src
   build-depends:
       MonadRandom
+    , adjunctions
     , base >=4.7 && <5
     , comonad
     , concat-classes
@@ -70,9 +71,10 @@ executable opt-expect-exe
       Paths_opt_expect
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -fplugin=ConCat.Plugin -fplugin=Fusion.Plugin -O2
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -fplugin=ConCat.Plugin -O2
   build-depends:
       MonadRandom
+    , adjunctions
     , base >=4.7 && <5
     , comonad
     , concat-classes
@@ -105,6 +107,7 @@ test-suite opt-expect-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       MonadRandom
+    , adjunctions
     , base >=4.7 && <5
     , comonad
     , concat-classes
