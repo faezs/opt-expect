@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
@@ -19,14 +20,16 @@ import ConCat.Rebox ()
 import ConCat.Additive
 
 import qualified Data.Vector.Generic as VG
+import qualified Data.Vector.Sized as VS
 import Data.Key
 import Data.Foldable
+import qualified Data.Functor.Rep as Rep
 
 import Control.Comonad
 
 import GHC.Generics hiding (R)
 import GHC.TypeLits
-
+import Control.Monad
 
 {--
 class (MonadSample m) => Policy m (p :: Nat -> Nat -> Nat -> *) s a r where
@@ -36,9 +39,26 @@ class (MonadSample m) => Policy m (p :: Nat -> Nat -> Nat -> *) s a r where
   value :: p i h o -> s -> r
 --}
 
+-- | Draw from a discrete distribution using a sequence of draws from
+-- Bernoulli.
+fromPMF' :: MonadSample m => Int -> (Int -> Double) -> m Int
+fromPMF' (!n) !p = f 0 1
+  where
+    f !i !r = do
+      when (r < 0) $ error "fromPMF: total PMF above 1"
+      let q = p i
+      when (q < 0 || q > 1) $ error "fromPMF: invalid probability value"
+      b <- bernoulli (q / r)
+      let n' = mod (i + 1) n
+      if b then pure i else if (i + 1 >= n) then pure i else f (i + 1) (r - q)
 
-sampleCat :: (MonadSample m, VG.Vector f R, Foldable f, Enum a) => f R -> m a
-sampleCat cs = toEnum <$> (categorical cs)
+
+categorical' :: (MonadSample m, KnownNat n) => V n R -> m Int
+categorical' (!ps) = fromPMF' (VS.length ps) $! (VS.unsafeIndex ps)
+{-# INLINE categorical' #-}
+
+sampleCat :: (MonadSample m, KnownNat n, Enum a) => V n R -> m a
+sampleCat cs = toEnum <$> (categorical' $! cs)
 {-# INLINE sampleCat #-}
 
 logProbCat :: (Indexable f) => f R -> Key f -> R
