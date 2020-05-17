@@ -1,3 +1,5 @@
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
@@ -10,9 +12,12 @@ import Control.Monad.State.Lazy
 import Control.Monad.Bayes.Class
 import Control.Monad.Bayes.Sampler
 
+import Control.Arrow
 import Utils
 import qualified Data.Vector.Sized as VS
 import Data.Maybe (fromJust)
+
+import Env
 {---------------------
 
 A pole is attached by an unactuated joint to a cart, which moves along a frictionless track.
@@ -55,18 +60,45 @@ average reward >= 195 over 100 consecutive trials
 ----------------------}
 
 
+-- This is what a transition trajectory looks like in CP
+type CPTrans = Transition CPState CPAct R
+
+type CPEpisode = Episode CPState CPAct R
+
+data CPState = CPState
+  { cpX:: !R  -- cart position
+  , xdot :: !R -- cart velocity
+  , theta :: !R -- pole angle
+  , thetadot :: !R -- pole velocity
+  } deriving (Eq, Ord, Show)
+
+
+
+instance HasV CPState 4 where
+  toV CPState{..} = fromJust $ VS.fromList @4 [cpX, xdot, theta, thetadot]
+  fromV v = CPState{..}
+    where cpX:xdot:theta:thetadot:[] = VS.toList v
+
+data CPAct = PushLeft | PushRight deriving (Eq, Ord, Show, Enum)
+
+instance HasV CPAct 2 where
+  toV PushLeft = fromJust $ VS.fromList @2 [1, 0]
+  toV PushRight = fromJust $ VS.fromList @2 [0, 1]
+  fromV v = if x > y then PushLeft else PushRight
+    where
+      x:y:[] = VS.toList v
 
 data CPConf = CPConf
-  { gravity :: R
-  , massCart :: R
-  , massPole :: R
-  , totalMass :: R
-  , poleHalfLength :: R
-  , poleMassLength :: R
-  , forceMag :: R
-  , secondsBetweenUpdates :: R
-  , thetaThreshold :: R
-  , xThreshold :: R
+  { gravity :: !R
+  , massCart :: !R
+  , massPole :: !R
+  , totalMass :: !R
+  , poleHalfLength :: !R
+  , poleMassLength :: !R
+  , forceMag :: !R
+  , secondsBetweenUpdates :: !R
+  , thetaThreshold :: !R
+  , xThreshold :: !R
   } deriving (Eq, Ord, Show)
 
 cartPoleDef = CPConf
@@ -83,38 +115,6 @@ cartPoleDef = CPConf
   }
 
 
-data CPState = CPState
-  { cpX:: R  -- cart position
-  , xdot :: R -- cart velocity
-  , theta :: R -- pole angle
-  , thetadot :: R -- pole velocity
-  } deriving (Eq, Ord, Show)
-
-instance HasV CPState 4 where
-  toV CPState{..} = fromJust $ VS.fromList @4 [cpX, xdot, theta, thetadot]
-  fromV v = CPState{..}
-    where cpX:xdot:theta:thetadot:[] = VS.toList v
-
-data CPAct = PushLeft | PushRight deriving (Eq, Ord, Show, Enum)
-
-instance HasV CPAct 2 where
-  toV PushLeft = fromJust $ VS.fromList @2 [1, 0]
-  toV PushRight = fromJust $ VS.fromList @2 [0, 1]
-  fromV v = if x > y then PushLeft else PushRight
-    where
-      x:y:[] = VS.toList v
-
-type EnvState s r = State s r
-
-data Transition s a r = Transition
-  { s_t :: s
-  , s_tn :: s
-  , a_t :: a
-  , rw :: r
-  , done :: Bool
-  } deriving (Eq, Ord, Show)
-
-type CPTrans = Transition CPState CPAct R
 
 toRad n = n * (pi / 180)
 
@@ -127,9 +127,6 @@ dynamicsCP CPConf{..} f s@CPState{..} = CPState
       , thetadot = thetadot + (secondsBetweenUpdates * t'')
       }
       where
-        --nC = ((massCart + massPole) * gravity)
-        --     - (massPole * poleHalfLength *
-        --        (t'' * sinTh + (thetadot * thetadot * cosTh)))
         tMass = massCart + massPole
         t'' = num / denom
           where
@@ -144,11 +141,12 @@ dynamicsCP CPConf{..} f s@CPState{..} = CPState
         cosTh = cos theta
         sinTh = sin theta
 
-stepCP :: CPConf -> (CPState -> CPAct) -> EnvState CPState CPTrans
+
+stepCP :: forall m. (MonadSample m) => CPConf -> (CPState -> m CPAct) -> EnvState m CPState CPTrans
 stepCP c@CPConf{..} actor = do
   st <- get
+  act <- lift $ actor st
   let
-    act = actor st
     force PushRight = forceMag
     force PushLeft = (- forceMag)
     st' = dynamicsCP c (force act) st
@@ -164,23 +162,16 @@ stepCP c@CPConf{..} actor = do
       || cpX > (xThreshold)
       || theta < (- (thetaThreshold))
       || theta > (thetaThreshold)
-    
 
-stepsCP conf act = mapM (\_ -> stepCP conf act) [1..]
+--stepsCP :: (MonadSample m) => CPConf -> (CPState -> m CPAct) -> StateT CPState m [CPTrans]
+--stepsCP conf act = mapM (\_ -> stepCP conf act) [1..]
 
-runCP :: CPState -> (CPState -> CPAct) -> [CPTrans]
-runCP initState actor = evalState (stepsCP cartPoleDef actor) initState
+--runCP :: forall m. (MonadSample m) => CPState -> (CPState -> m CPAct) -> m [CPTrans]
+--runCP initState actor = evalStateT (stepsCP cartPoleDef actor) initState
 
-runEpisode :: (s -> (s -> a) -> [Transition s a r]) -> s -> (s -> a) -> [Transition s a r]
-runEpisode r i a = (takeWhileInclusive (\Transition{done} -> not done)) $ r i a
-  where
-    takeWhileInclusive _ [] = []
-    takeWhileInclusive p (x:xs) = x : if p x then takeWhileInclusive p xs else []
+runCPEpisode ::  CPState -> (CPState -> SamplerIO CPAct) -> IO (CPEpisode)
+runCPEpisode i a = sampleIO $ runEpisode (stepCP cartPoleDef) a i
 
-runCPEpisode :: CPState -> (CPState -> CPAct) -> [CPTrans]
-runCPEpisode i a = runEpisode runCP i a
-
--- (State, Transition) -> 
 
 initCP :: (MonadSample m) => m CPState
 initCP = CPState <$> dist <*> dist <*> dist <*> dist
@@ -190,12 +181,15 @@ initCP = CPState <$> dist <*> dist <*> dist <*> dist
 initCPIO :: IO CPState
 initCPIO = sampleIO initCP
 
-runCPEpisodeIO :: (CPState -> CPAct) -> IO [CPTrans]
-runCPEpisodeIO a = do
-  i <- initCPIO
-  ts <- return $ runCPEpisode i a
-  return $ ts
---type Agent m s a = StateT (s -> a) m 
+--runCPEpisodeIO :: CPState -> (CPState -> SamplerIO CPAct) -> IO CPEpisode
+--runCPEpisodeIO i a = sampleIO $ runCPEpisode i a
+  --i <- initCPIO
+  --ts <- sampleIO $ runCPEpisode @SamplerIO i (a @(SamplerIO))
+  --return $ ts
+
+--runCPEpisodeIO :: (MonadSample m) => (CPState -> m CPAct) -> IO CPEpisode
+--runCPEpisodeIO agent = lift (runCPEpisodeM agent)
+
 
 dumbAgent :: CPState -> State Int CPAct
 dumbAgent _ = do
