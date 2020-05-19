@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE Rank2Types #-}
@@ -26,10 +28,17 @@ import GHC.TypeLits
 
 import Utils
 
+import Control.Monad
+import Control.Monad.Bayes.Sampler
+import Control.Monad.Bayes.Class
+import GHC.TypeLits
+
 import qualified Streamly.Prelude as S
 import Streamly
+import qualified Streamly.Data.Fold as FL
+import qualified Streamly.Internal.Data.Fold as FL
+import Control.Monad.IO.Class
 
-import Control.Monad.Bayes.Sampler
 
 type MonadEnv m = (MonadSample m, MonadAsync m)
 
@@ -50,6 +59,7 @@ data Episode s a r = Episode
   , reward :: r
   , trajectories :: [Transition s a r]
   , rewardToGo :: [r]
+  , stateValue :: [r]
   } deriving (Eq, Ord, Show, Generic)
 
 instance Num r => Semigroup (Episode s a r) where
@@ -61,7 +71,7 @@ instance Num r => Semigroup (Episode s a r) where
            }
 
 instance Num r => Monoid (Episode s a r) where
-  mempty = Episode 0 0 [] []
+  mempty = Episode 0 0 [] [] []
 
 runEpisode ::
   forall m s a r.
@@ -71,16 +81,18 @@ runEpisode ::
   )
   => ((s -> m a) -> EnvState m s (Transition s a r))
   -> (s -> m a)
+  -> (s -> r)
   -> s
   -> m (Episode s a r)
-runEpisode stepFn agent initS = do
+runEpisode stepFn agent valueFn initS = do
   txs <- (takeWhileInclusive (\tx -> not . done $ tx))
-           <$> (evalStateT (mapM (\_ -> stepFn agent) [1..200]) $ initS)
+           <$> (evalStateT (mapM (\_ -> stepFn agent) [1..1000]) $ initS)
   return $ Episode
     { timesteps = length txs
     , reward = sumA (fmap rw txs)
     , trajectories = txs
-    , rewardToGo = rTG txs 
+    , rewardToGo = rTG txs
+    , stateValue = (valueFn . s_t) <$> txs
     }
   where
     rTG xs = (\r -> totalR - r)
@@ -92,26 +104,44 @@ runEpisode stepFn agent initS = do
 {-# INLINE runEpisode #-}
 
 
+runEpochs :: forall s a i h o. (HasV s i, HasV a o, KnownNat h)
+  => (Episode s a R -> Unop (PType i h o))
+  -> ((s -> SamplerIO a) -> EnvState SamplerIO s (Transition s a R))
+  -> (SamplerIO s)
+  -> (PType i h o -> s -> SamplerIO a)
+  -> (PType i h 1 -> s -> R)
+  -> PType i h o
+  -> PType i h 1
+  -> IO ()
+runEpochs learner episodeFn initStateM agent valueFn polParams valParams = do
+  p' <- S.last $ S.take 100 $ S.iterateM (epoch 20) (pure polParams)
+  return ()
+    where
+      epoch nEp ip = S.fold (combFst <$> (rlFold @IO @s @a @i @h @o learner ip) <*> statisticsFold) $ episodes ip nEp
+      combFst :: PType i h o -> () -> PType i h o
+      combFst a _ = a
+      episodes :: (IsStream t) => PType i h o -> Int -> t IO (Episode s a R)
+      episodes ip nEps = parallely $ S.replicateM nEps
+        ((\s -> sampleIO $
+           runEpisode episodeFn (agent ip) (valueFn valParams) s) =<< (sampleIO $ initStateM))
+{-# INLINE runEpochs #-}
 
-agentEpisode :: forall m p s a r i h o. (MonadSample m, HasV s i, HasV a o, KnownNat h)
-       => (Episode s a r -> p i h o -> p i h o)       -- Learner
-       -> (p i h o -> s -> m a)                       -- Agent
-       -> (s -> (s -> m a) -> m (Episode s a r))      -- Environment
-       -> Int                                         -- number of episodes
-       -> s                                           -- initial state of the environment
-       -> p i h o                                     -- initial parameters with an input size i, output size o
-       -> m (p i h o)                                 -- list of parameters for the run
-agentEpisode = \learner agent runEp n initS startPs ->
-  (liftM . flip learner $ startPs) $ rollOut agent runEp initS startPs
-{-# INLINE agentEpisode #-}
+rlFold :: forall m s a i h o. (Monad m, HasV s i, HasV a o, KnownNat h) => (Episode s a R -> Unop (PType i h o)) -> PType i h o -> FL.Fold m (Episode s a R) (PType i h o)
+rlFold policyUpdate initP = FL.Fold (step) (return $ begin) (finish)
+  where
+    begin :: (PType i h o)
+    begin = initP
+    step :: (PType i h o) -> Episode s a R -> m (PType i h o)
+    step p ep = pure $ policyUpdate ep p
+    finish :: (PType i h o) -> m (PType i h o)
+    finish = return
+{-# INLINE rlFold #-}
 
-
-rollOut ::
-  (MonadSample m, HasV s i, HasV a o, KnownNat h)
-  => (p i h o -> s -> m a)
-  -> (s -> (s -> m a) -> m (Episode s a r))
-  -> s
-  -> p i h o
-  -> m (Episode s a r)
-rollOut = \agent runEp initS startPs -> runEp initS (agent startPs)
-{-# INLINE rollOut #-}
+statisticsFold :: forall m s a. (MonadIO m) => FL.Fold m (Episode s a R) ()
+statisticsFold = FL.Fold (step) begin end
+  where
+    begin = pure (0, 0)
+    step :: (R, R) -> Episode s a R -> m (R, R)
+    step (total, len) Episode{..} = return $ ((reward + total), len + 1)
+    end (total, len) = (liftIO $ putStrLn "average reward: " <> (print $ total / len))
+{-# INLINE statisticsFold #-}
