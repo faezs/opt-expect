@@ -51,14 +51,14 @@ fromPMF' (!n) !p = f 0 1
       b <- bernoulli (q / r)
       let n' = mod (i + 1) n
       if b then pure i else if (i + 1 >= n) then pure i else f (i + 1) (r - q)
-
+{-# INLINE fromPMF' #-}
 
 categorical' :: (MonadSample m, KnownNat n) => V n R -> m Int
 categorical' (!ps) = fromPMF' (VS.length ps) $! (VS.unsafeIndex ps)
 {-# INLINE categorical' #-}
 
 sampleCat :: (MonadSample m, KnownNat n, Enum a) => V n R -> m a
-sampleCat cs = toEnum <$> (categorical' $! cs)
+sampleCat = \cs -> toEnum <$> (categorical' $! cs)
 {-# INLINE sampleCat #-}
 
 logProbCat :: (Indexable f) => f R -> Key f -> R

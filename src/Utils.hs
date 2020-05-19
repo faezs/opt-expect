@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Utils where
 
@@ -6,8 +7,14 @@ import qualified Data.Vector.Sized as VS
 import Control.Monad.State
 import GHC.TypeLits
 import ConCat.Misc
+import ConCat.Deep
+import GHC.Generics hiding (R)
+
+
 
 type V = VS.Vector
+
+type PType i h o = ((V h --+ V o) :*: (V h --+ V h) :*: (V i --+ V h)) R
 
 -- | Create an arbitrary functor filled with different random values.
 randF :: (Traversable f, Applicative f, Random a) => Int -> f a

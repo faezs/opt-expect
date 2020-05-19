@@ -41,11 +41,13 @@ import Policy
 import Env
 
 
-type PType i h o = ((V h --+ V o) :*: (V h --+ V h) :*: (V i --+ V h)) R
-
 softmax :: (Functor f, Functor g, Foldable g, Fractional s, Floating s, Additive s) => Unop (f (g s))
 softmax = (normalize <$>) . ((fmap.fmap) (\a -> exp a))
 {-# INLINE softmax #-}
+
+valueFn :: (KnownNat i, KnownNat h) => PType i h 1 -> (V i --> V 1) R
+valueFn = lr3'
+{-# INLINE valueFn #-}
 
 policy :: (KnownNat i, KnownNat h, KnownNat o) => PType i h o -> (V i --> V o) R
 policy = lr3'  -- Defined in ConCat.Deep.
@@ -68,18 +70,34 @@ policyGradient = \lr episode params -> params ^-^ (lr *^ ((gradLogProbExp episod
 {-# INLINE policyGradient #-}
 
 
+{----------------------------------- PPO-Clip ------------------------------------------}
+
+
+valueFnLearn :: forall s a i h. (HasV s i, KnownNat h) => (PType i h 1 -> V i R -> V 1 R) -> Episode s a R -> PType i h 1 -> PType i h 1
+valueFnLearn = \valueFn eps vParams -> steps valueFn 0.1 (trainingPairs eps) vParams
+  where
+    trainingPairs :: Episode s a R -> [(V i R, V 1 R)]
+    trainingPairs = \Episode{..} -> zip ((\Transition{..} -> (toV s_t)) <$> trajectories) (VS.singleton <$> rewardToGo)
+{-# INLINE valueFnLearn #-}
+
+ppoUpdate :: forall i h o s a. (KnownNat i, KnownNat h, KnownNat o, HasV s i, HasV a o) => R -> Episode s a R -> PType i h o -> PType i h 1
+ppoUpdate = undefined
+
+{-------------------------------- Vanilla Policy Gradient -----------------------------}
+
+
 -- Expectation over the grad log prob for all trajectories of an episode
 gradLogProbExp :: (KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => Episode s a R -> (Unop (PType i h o))
-gradLogProbExp = \Episode{..} params ->
+gradLogProbExp = \Episode{..} policyParams ->
   scaleV ((-1) / (fromIntegralC . length $ trajectories) :: R)
-  (sumA $ (\(s, a, rtg) -> gradLogProb (rtg) s a params)
+  (sumA $ (\(s, a, rtg) -> gradLogProb (rtg) s a policyParams)
     <$> (fmap (\(rtg, Transition{..}) ->
-                  (toV s_t, toV a_t, rtg)) (zip rewardToGo trajectories))) 
+                  (toV s_t, toV a_t, rtg)) (zip (repeat reward) trajectories)))
 {-# INLINE gradLogProbExp #-}
 
 
 -- Gradient of the loss over one trajectory
--- episode_reward * logProb of the action given policy with params on the state st
+-- episode_reward * logProb of the action given policy with params on the state stPPO
 gradLogProb :: forall i h o. (KnownNat h, KnownNat i, KnownNat o) => R -> V i R -> V o R -> PType i h o -> PType i h o
 gradLogProb = \epR st act params -> gradR (\ps -> epR * (((policy @i @h @o ps) st) <.> act)) params
 {-# INLINE gradLogProb #-}

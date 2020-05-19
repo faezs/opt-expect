@@ -33,7 +33,9 @@ reinforce = do
   putStrLn "running cartpole"
   let
     policyNet = (gaussInit <$> randF 1 :: PType 4 16 2)
-  runEpochs (policyGradient 0.1) runCPEpisode initCP catAgent policyNet
+    valueNet = (gaussInit <$> randF 1 :: PType 4 16 1)
+  _ <- runEpochs 1 20 (policyGradient 0.1) (valueFnLearn valueFn) stepCP initCP catAgent valueFn policyNet valueNet
+  return ()
 {-# INLINE reinforce #-}
 
 {--

@@ -142,8 +142,8 @@ dynamicsCP CPConf{..} f s@CPState{..} = CPState
         sinTh = sin theta
 
 
-stepCP :: forall m. (MonadSample m) => CPConf -> (CPState -> m CPAct) -> EnvState m CPState CPTrans
-stepCP c@CPConf{..} actor = do
+stepCP' :: forall m. (MonadSample m) => CPConf -> (CPState -> m CPAct) -> EnvState m CPState CPTrans
+stepCP' c@CPConf{..} actor = do
   st <- get
   act <- lift $ actor st
   let
@@ -169,8 +169,11 @@ stepCP c@CPConf{..} actor = do
 --runCP :: forall m. (MonadSample m) => CPState -> (CPState -> m CPAct) -> m [CPTrans]
 --runCP initState actor = evalStateT (stepsCP cartPoleDef actor) initState
 
-runCPEpisode ::  CPState -> (CPState -> SamplerIO CPAct) -> SamplerIO (CPEpisode)
-runCPEpisode i a = runEpisode (stepCP cartPoleDef) a i
+stepCP :: forall m. (MonadSample m) => (CPState -> m CPAct) -> EnvState m CPState CPTrans
+stepCP = stepCP' cartPoleDef
+
+runCPEpisode ::  CPState -> (CPState -> SamplerIO CPAct) -> (CPState -> R) -> SamplerIO (CPEpisode)
+runCPEpisode i a v = runEpisode (stepCP) a v i
 
 
 initCP :: (MonadSample m) => m CPState
