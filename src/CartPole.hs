@@ -169,8 +169,8 @@ stepCP c@CPConf{..} actor = do
 --runCP :: forall m. (MonadSample m) => CPState -> (CPState -> m CPAct) -> m [CPTrans]
 --runCP initState actor = evalStateT (stepsCP cartPoleDef actor) initState
 
-runCPEpisode ::  CPState -> (CPState -> SamplerIO CPAct) -> IO (CPEpisode)
-runCPEpisode i a = sampleIO $ runEpisode (stepCP cartPoleDef) a i
+runCPEpisode ::  CPState -> (CPState -> SamplerIO CPAct) -> SamplerIO (CPEpisode)
+runCPEpisode i a = runEpisode (stepCP cartPoleDef) a i
 
 
 initCP :: (MonadSample m) => m CPState
