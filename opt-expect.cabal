@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8683d2d9aa7c77acfa47891cfdff5e18a7f69f4846a5ea66cf75a54dc381870a
+-- hash: 4e8364891844cb91f224b635c27a13c0289ff045e3e3b7de874250b7606c1cd5
 
 name:           opt-expect
 version:        0.1.0.0
@@ -30,10 +30,12 @@ source-repository head
 library
   exposed-modules:
       AD.SimpleEssence
+      Adam
       CartPole
       DDQN
       Env
       Lib
+      MLUtils
       Policy
       PPO
       SCG.Graph
