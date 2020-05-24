@@ -29,6 +29,7 @@ import GHC.Generics hiding (R)
 import GHC.TypeLits
 
 import Utils
+import MLUtils (HasLayers(..), showPart)
 import ConCat.Deep
 
 
@@ -106,41 +107,62 @@ runEpisode stepFn agent valueFn initS = do
 {-# INLINE runEpisode #-}
 
 
+
+type RLUpdate i h o s a = Episode s a R -> Unop (PType i h o)
+
+type RunEnv s a = ((s -> SamplerIO a)) -> EnvState SamplerIO s (Transition s a R)
+
+type StochasticPolicy i h o s a = (PType i h o -> s -> SamplerIO a)
+
+type ValueFn i h = (PType i h 1 -> V i R -> V 1 R)
+
 runEpochs :: forall s a i h o. (HasV s i, HasV a o, KnownNat h, Show s, Show a)
   => Int
   -> Int
-  -> (Episode s a R -> Unop (PType i h o))
-  -> (Episode s a R -> Unop (PType i h 1))
-  -> ((s -> SamplerIO a) -> EnvState SamplerIO s (Transition s a R))
+  -> (RLUpdate i h o s a)
+  -> (RLUpdate i h 1 s a)
+  -> (RunEnv s a)
   -> (SamplerIO s)
-  -> (PType i h o -> s -> SamplerIO a)
-  -> (PType i h 1 -> V i R -> V 1 R)
+  -> StochasticPolicy i h o s a
+  -> ValueFn i h
   -> PType i h o
   -> PType i h 1
-  -> IO (PType i h o)
+  -> IO (PType i h o, PType i h 1)
 runEpochs nEpochs nEps learner vfLearner episodeFn initStateM agent valueFn polParams vfParams = do
-  (Just (p', v')) <- S.last $ S.take nEpochs $
-                     S.iterateM (epoch nEps) (pure (polParams, vfParams))
-  print (polParams ^-^ p')
-  print (vfParams ^-^ v')
-  return p' --(p', v')
+  (p', v') <- S.fold ((\a b -> b)
+                      <$> (deltaFold)
+                      <*> (FL.Fold (\a b -> return $ b) (pure (polParams, vfParams)) pure)
+                     )
+              $ S.take nEpochs
+              $ S.iterateM (epoch nEps) (pure (polParams, vfParams))
+  return (p', v')
     where
+      deltaFold :: FL.Fold IO (PType i h o, PType i h 1) ()
+      deltaFold = FL.Fold wrapDelta begin unwrap-- unwrap
+        where
+          unwrap :: (PType i h o, PType i h 1) -> IO ()
+          unwrap = (\_-> pure ())
+          begin :: IO (PType i h o, PType i h 1)
+          begin = pure (polParams, vfParams)
+          wrapDelta :: (PType i h o, PType i h 1) -> (PType i h o, PType i h 1) -> IO (PType i h o, PType i h 1)
+          wrapDelta (p, v) (p', v') = print (sumA $ p ^-^ p') >> return (p', v')
       epoch :: Int -> (PType i h o, PType i h 1) -> IO (PType i h o, PType i h 1)
-      epoch nEps (polP, vfP) = S.fold (comb <$> (policyFold @IO @s @a @i @h @o learner polP)
+      epoch nEps (polP, vfP) = S.fold (comb
+                                       <$> (policyFold @IO @s @a @i @h @o learner polP)
                                        <*> (valueFnFold @IO @s @a @i @h vfLearner vfP)
                                        <*> statisticsFold)
                          (episodes polP vfP nEps)
-      --comb :: PType i h o -> PType i h 1 -> () -> (PType i h o, PType i h 1)
-      comb p v _ = (p, v)
+      comb :: PType i h o -> PType i h 1 -> () -> (PType i h o, PType i h 1)
+      comb p v () = (p, v)
       episodes :: (IsStream t) => PType i h o -> PType i h 1 -> Int -> t IO (Episode s a R)
-      episodes polP vfP nEps = parallely $ S.trace (print @(Episode s a R)) $ S.replicateM nEps
+      episodes polP vfP nEps = parallely $ S.replicateM nEps
         ((\s -> sampleIO $
            runEpisode episodeFn (agent polP) ((wrapVF valueFn) vfP) s) =<< (sampleIO $ initStateM))
 {-# INLINE runEpochs #-}
 
 
 policyFold :: forall m s a i h o. (Monad m, HasV s i, HasV a o, KnownNat h)
-  => (Episode s a R -> Unop (PType i h o))
+  => (RLUpdate i h o s a)
   -> PType i h o
   -> FL.Fold m (Episode s a R) (PType i h o)
 policyFold = \policyUpdate initP -> FL.Fold (step policyUpdate) (pure initP) (finish)
@@ -153,7 +175,7 @@ policyFold = \policyUpdate initP -> FL.Fold (step policyUpdate) (pure initP) (fi
 
 
 valueFnFold :: forall m s a i h . (Monad m, HasV s i, KnownNat h)
-  => (Episode s a R -> Unop (PType i h 1))
+  => (RLUpdate i h 1 s a)
   -> PType i h 1
   -> FL.Fold m (Episode s a R) (PType i h 1)
 valueFnFold = \valueUpdate initP -> FL.Fold (step valueUpdate) (pure initP) finish
@@ -177,3 +199,24 @@ statisticsFold = FL.Fold (step) begin end
 wrapVF :: (HasV s i, KnownNat h) => (PType i h 1 -> V i R -> V 1 R) -> (PType i h 1 -> s -> R)
 wrapVF vf = \p s -> VS.sum $ vf p (toV s)
 {-# INLINE wrapVF #-}
+
+
+weightDelta :: [PType i h o] -> [PType i h 1] -> IO ()
+weightDelta ps vs = do
+  mapM_ putStrLn $ showPart getWeights "Policy" ps
+  mapM_ putStrLn $ showPart getWeights "Value Function" $ vs
+  return ()
+{-# INLINE weightDelta #-}
+
+{--
+      printMS :: forall f a. (Show a, Functor f, Show (f a)) => String -> (f a, f a) -> String
+      printMS = (\tag (m, s) -> tag <> "\n" <> "mean delP: " <> show m <> "\n" <> "std delP: " <> show s)
+      meanStd :: f (g a) -> f (g a) -> (f a, f a)
+      meanStd a a' = (mean dp, stdDev dp)
+        where
+          dp = a ^-^ a'
+          mean :: f (g a) -> f a
+          mean fs = zipWith (/) (fmap sumA fs) (fmap (fromIntegral length) fs)
+          stdDev :: f (g a) -> f a
+          stdDev fs = (fmap (\f-> f ^-^ mean f) fs) ^/ (sumA $ mean fs)
+--}
