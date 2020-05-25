@@ -64,5 +64,12 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -fplugin=ConCat.Plugin
+    - -O2
     dependencies:
     - opt-expect
+    - hspec
+    - QuickCheck
+    - checkers
+    - quickcheck-instances
+

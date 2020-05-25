@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4e8364891844cb91f224b635c27a13c0289ff045e3e3b7de874250b7606c1cd5
+-- hash: 755ca53d29343dd08074f9cf29ad7ba716c2e8b08f59c9398b32b66149d49541
 
 name:           opt-expect
 version:        0.1.0.0
@@ -102,15 +102,18 @@ test-suite opt-expect-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      AdamSpec
       CPSpec
       Paths_opt_expect
   hs-source-dirs:
       test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -fplugin=ConCat.Plugin -O2
   build-depends:
       MonadRandom
+    , QuickCheck
     , adjunctions
     , base >=4.7 && <5
+    , checkers
     , comonad
     , concat-classes
     , concat-examples
@@ -119,10 +122,12 @@ test-suite opt-expect-test
     , finite-typelits
     , ghc-prim
     , hmatrix
+    , hspec
     , keys
     , monad-bayes
     , mtl
     , opt-expect
+    , quickcheck-instances
     , random
     , stm
     , streamly >=0.7.2
