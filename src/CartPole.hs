@@ -18,6 +18,9 @@ import qualified Data.Vector.Sized as VS
 import Data.Maybe (fromJust)
 
 import Env
+
+import Streamly
+import qualified Streamly.Prelude as S
 {---------------------
 
 A pole is attached by an unactuated joint to a cart, which moves along a frictionless track.
@@ -63,7 +66,7 @@ average reward >= 195 over 100 consecutive trials
 -- This is what a transition trajectory looks like in CP
 type CPTrans = Transition CPState CPAct R
 
-type CPEpisode = Episode CPState CPAct R
+
 
 data CPState = CPState
   { cpX:: !R  -- cart position
@@ -153,7 +156,7 @@ stepCP' c@CPConf{..} actor = do
     d = done st'
     r = reward
   put st'
-  return $ Transition st st' act r d 0 0
+  return $ Transition st st' act r d 0 0 0
   where
     reward :: R
     reward = 1
@@ -167,7 +170,7 @@ stepCP' c@CPConf{..} actor = do
 stepCP :: forall m. (MonadSample m) => (CPState -> m CPAct) -> EnvState m CPState CPTrans
 stepCP = stepCP' cartPoleDef
 
-runCPEpisode ::  CPState -> (CPState -> SamplerIO CPAct) -> (CPState -> R) -> SamplerIO (CPEpisode)
+runCPEpisode ::  CPState -> (CPState -> SamplerIO CPAct) -> (CPState -> R) -> SerialT SamplerIO CPTrans
 runCPEpisode i a v = runEpisode (stepCP) a v i
 
 
