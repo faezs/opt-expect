@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -12,8 +13,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# OPTIONS_GHC -fplugin-opt=ConCat.Plugin:showResiduals #-}
---{-# OPTIONS_GHC -fplugin-opt=ConCat.Plugin:trace #-}
---{-# OPTIONS_GHC -fsimpl-tick-factor=500 #-}
 
 module PPO where
 
@@ -44,6 +43,10 @@ import Policy
 import Env
 import Adam
 
+import Streamly
+import qualified Streamly.Prelude as S
+import qualified Streamly.Data.Fold as FL
+import qualified Streamly.Internal.Data.Fold as FL
 
 softmax :: (Functor f, Functor g, Foldable g, Fractional s, Floating s, Additive s) => Unop (f (g s))
 softmax = (normalize <$>) . ((fmap.fmap) (\a -> exp a))
@@ -82,19 +85,52 @@ type Advantage = R
 
 type KnownNat3 a b c = (KnownNat a, KnownNat b, KnownNat c)
 
-valueFnLearn :: forall s a i h. (HasV s i, KnownNat h) => (PType i h 1 -> V i R -> V 1 R) -> Episode s a R -> PType i h 1 -> PType i h 1
-valueFnLearn = \valueFn eps vParams -> steps valueFn 0.1 (trainingPairs eps) vParams
+valueFnLearn :: forall s a i h. (HasV s i, KnownNat h) => (PType i h 1 -> V i R -> V 1 R) -> R -> Episode s a R -> PType i h 1 -> PType i h 1
+valueFnLearn = \valueFn gamma eps vParams -> (steps valueFn gamma (trainingPairs eps)) vParams
   where
     trainingPairs :: Episode s a R -> [(V i R, V 1 R)]
-    trainingPairs = \Episode{..} -> zip ((\Transition{..} -> (toV s_t)) <$> trajectories) (VS.singleton <$> rewardToGo)
+    trainingPairs = \Episode{..} -> ((\Transition{..} -> (toV s_t, VS.singleton rw)) <$> trajectories)
 {-# INLINE valueFnLearn #-}
 
-ppoUpdate :: forall i h o s a. (RLCon s a i h o) => R -> R -> Episode s a R -> Unop (PType i h o)
-ppoUpdate lr eta Episode{..} pi = expectation $ (\tx -> gradR (\pi' -> ppoLoss eta tx 1 pi' pi') pi) <$> trajectories
-{-# INLINE ppoUpdate #-}
 
-ppoLoss :: forall i h o s a. (RLCon s a i h o) => R -> Transition s a R -> Advantage -> PType i h o -> PType i h o -> R
-ppoLoss eta Transition{..} adv thetaK theta = min (policyRatio theta thetaK (toV s_t) (toV a_t) * adv) (g eta adv)
+-- chunksOf :: (IsStream t, Monad m) => Int -> Fold m a b -> t m a -> t m b
+
+ppoUpdate  :: forall m n i h o s a.
+  (RLCon s a i h o, KnownNat n, MonadAsync m)
+  => Int
+  -> R
+  -> R
+  -> SerialT m (Transition s a R)
+  -> PType i h o
+  -> m (PType i h o)
+ppoUpdate batchSize lr eta trajectories pi = do
+  pis <- S.fold @m FL.last
+         $ S.postscan (runner pi)
+         ((fromJust . VS.fromList @n) <$> S.chunksOf batchSize FL.toList trajectories)
+  let (piOld, piNew) = fromJust $ pis
+  return piNew
+  where
+    runner :: PType i h o -> FL.Fold m (V n (Transition s a R)) (PType i h o, PType i h o) 
+    runner pi = FL.Fold step begin end
+      where
+        begin :: m (PType i h o, PType i h o)
+        begin = pure $ (pi, pi)
+        step :: (PType i h o, PType i h o) -> V n (Transition s a R) -> m (PType i h o, PType i h o)
+        step (piOld, piNew) tx = pure $ (piNew, ppoGrad lr eta tx piOld piNew)
+        end :: (PType i h o, PType i h o) -> m (PType i h o, PType i h o)
+        end v = (return @m) v
+{-# INLINE ppoUpdate #-}
+        
+ppoGrad :: forall n i h o s a. (RLCon s a i h o, KnownNat n) => R -> R -> V n (Transition s a R) -> PType i h o -> Unop (PType i h o)
+ppoGrad lr eta trajectories piOld pi = snd $ gradR batchLoss (piOld, pi)
+  where
+    batchLoss :: (PType i h o, PType i h o) -> R
+    batchLoss (pi', pi) = (sumA $ (\tx -> ppoLoss eta tx pi' pi) <$> trajectories) / (fromIntegral . VS.length $ trajectories) 
+--    txGrad = gradR (\(pi, piOld) -> ppoLoss eta tx 1 pi' piOld)
+{-# INLINE ppoGrad #-}
+
+ppoLoss :: forall i h o s a. (RLCon s a i h o) => R -> Transition s a R -> PType i h o -> PType i h o -> R
+ppoLoss eta Transition{..} thetaOld theta = min (policyRatio theta thetaOld (toV s_t) (toV a_t) * gAdv) (g eta gAdv)
 {-# INLINE ppoLoss #-}
 
 policyRatio :: (KnownNat3 i h o) => PType i h o -> PType i h o -> V i R -> V o R -> R
@@ -107,41 +143,37 @@ g eta adv
   | otherwise = (1 - eta) * adv
 {-# INLINE g #-}
 
---klDivergence :: (Functor p, Foldable p, Zip p, Additive (p k), Num k) => p k -> p k -> k
---klDivergence p p' = fmap 
---{-# INLINE klDivergence #-}
+
+
 {-------------------------------- Vanilla Policy Gradient -----------------------------}
 
 
---gradAscent :: (Functor p, Foldable p, Zip p, Additive (p k), Num k) => (p k) -> k -> Episode s a k -> (Episode s a k -> p k -> p k) -> p k
---gradAscent = \params lr episode loss ->  params ^+^ (lr *^ (loss episode params))
-
 policyGradient :: forall i h o s a. (KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => R -> Episode s a R -> Unop (PType i h o)
-policyGradient = \lr episode params -> params ^-^ (lr *^ ((gradLogProbExp episode) params))
+policyGradient = \lr Episode{trajectories} params -> params ^+^ (lr *^ ((gradLogProbExp trajectories) params))
 {-# INLINE policyGradient #-}
 
 
 -- Expectation over the grad log prob for all trajectories of an episode
-gradLogProbExp :: (KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => Episode s a R -> (Unop (PType i h o))
-gradLogProbExp = \Episode{..} policyParams ->
-  scaleV ((-1) / (fromIntegralC . length $ trajectories) :: R)
-  (sumA $ (\(s, a, rtg) -> gradLogProb (rtg) s a policyParams)
-    <$> (fmap (\(rtg, Transition{..}) ->
-                  (toV s_t, toV a_t, rtg)) (zip (repeat reward) trajectories)))
+gradLogProbExp :: forall i h o s a. (KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => [Transition s a R] -> (Unop (PType i h o))
+gradLogProbExp = \trajectories policyParams -> expectation $ (\(Transition{..}) -> gradLogProb gAdv (toV s_t) (toV a_t) policyParams) <$> trajectories
 {-# INLINE gradLogProbExp #-}
 
 
--- Gradient of the loss over one trajectory
--- episode_reward * logProb of the action given policy with params on the state stPPO
+-- The log probablitity is multiplied by the log prob of the action given the state to avoid threading it though
+-- into the expectation, which is just a sum 
 gradLogProb :: forall i h o. (KnownNat h, KnownNat i, KnownNat o) => R -> V i R -> V o R -> PType i h o -> PType i h o
-gradLogProb = \epR st act params -> gradR (\ps -> epR * (logProb ps st act)) params
+gradLogProb = \genAdv st act params -> (prob params st act) *^ (gradR (\ps -> genAdv * (logProb ps st act)) params)
 {-# INLINE gradLogProb #-}
 
 logProb :: forall i h o. (KnownNat h, KnownNat i, KnownNat o) => PType i h o -> V i R -> V o R -> R 
-logProb = \ps st act -> (((policy @i @h @o ps) st) <.> act)
+logProb = log . prob
 {-# INLINE logProb#-}
 
+prob :: forall i h o. (KnownNat h, KnownNat i, KnownNat o) => PType i h o -> V i R -> V o R -> R 
+prob = \ps st act -> (((policy @i @h @o ps) st) <.> act)
+{-# INLINE prob#-}
 
-expectation :: (Functor f, Foldable f, Additive a, Num a, Functor g, Additive (g a), Fractional a) => f (g a) -> g a
-expectation fs = (sumA fs) ^/ (fromIntegral $ length fs)
+
+expectation :: (Zip f, Functor f, Foldable f, Additive a, Num a, Functor g, Additive (g a), Fractional a) => f (g a) -> g a
+expectation fs = (sumA $ fs) ^/ (fromIntegral . length $ fs)
 {-# INLINE expectation #-}

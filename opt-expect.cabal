@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 755ca53d29343dd08074f9cf29ad7ba716c2e8b08f59c9398b32b66149d49541
+-- hash: ebaad85088e00199dd11b3e608a0ec657f48b45f62ea729eb573452987cf4a0c
 
 name:           opt-expect
 version:        0.1.0.0
@@ -60,6 +60,7 @@ library
     , monad-bayes
     , mtl
     , random
+    , random-shuffle
     , stm
     , streamly >=0.7.2
     , vector
@@ -91,6 +92,7 @@ executable opt-expect-exe
     , mtl
     , opt-expect
     , random
+    , random-shuffle
     , stm
     , streamly >=0.7.2
     , vector
@@ -129,6 +131,7 @@ test-suite opt-expect-test
     , opt-expect
     , quickcheck-instances
     , random
+    , random-shuffle
     , stm
     , streamly >=0.7.2
     , vector

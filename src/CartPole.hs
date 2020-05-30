@@ -153,21 +153,16 @@ stepCP' c@CPConf{..} actor = do
     d = done st'
     r = reward
   put st'
-  return $ Transition st st' act r d
+  return $ Transition st st' act r d 0 0
   where
     reward :: R
     reward = 1
     done :: CPState -> Bool
     done CPState {..} = cpX < (- xThreshold)
       || cpX > (xThreshold)
-      || theta < (- (thetaThreshold))
-      || theta > (thetaThreshold)
+      || theta < (- (toRadians thetaThreshold))
+      || theta > (toRadians thetaThreshold)
 
---stepsCP :: (MonadSample m) => CPConf -> (CPState -> m CPAct) -> StateT CPState m [CPTrans]
---stepsCP conf act = mapM (\_ -> stepCP conf act) [1..]
-
---runCP :: forall m. (MonadSample m) => CPState -> (CPState -> m CPAct) -> m [CPTrans]
---runCP initState actor = evalStateT (stepsCP cartPoleDef actor) initState
 
 stepCP :: forall m. (MonadSample m) => (CPState -> m CPAct) -> EnvState m CPState CPTrans
 stepCP = stepCP' cartPoleDef
@@ -183,15 +178,6 @@ initCP = CPState <$> dist <*> dist <*> dist <*> dist
 
 initCPIO :: IO CPState
 initCPIO = sampleIO initCP
-
---runCPEpisodeIO :: CPState -> (CPState -> SamplerIO CPAct) -> IO CPEpisode
---runCPEpisodeIO i a = sampleIO $ runCPEpisode i a
-  --i <- initCPIO
-  --ts <- sampleIO $ runCPEpisode @SamplerIO i (a @(SamplerIO))
-  --return $ ts
-
---runCPEpisodeIO :: (MonadSample m) => (CPState -> m CPAct) -> IO CPEpisode
---runCPEpisodeIO agent = lift (runCPEpisodeM agent)
 
 
 dumbAgent :: CPState -> State Int CPAct

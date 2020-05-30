@@ -45,8 +45,7 @@ reinforce = do
     --vf = S.scan (valueFnFold (valueFnLearn valueFn) valueNet) $ S.repeatM cpep
   --p' <- S.toList $ S.take 10 pl
   --vf' <- S.toList $ S.take 10 vf
-  --weightDelta p' vf'
-  runEpochs 20 50 (policyGradient 0.01) (valueFnLearn valueFn) stepCP initCP catAgent valueFn policyNet valueNet
+  runEpochs 50 400 (policyGradient 3e-4) (valueFnLearn valueFn 1e-3) stepCP initCP catAgent valueFn policyNet valueNet
   return ()
 {-# INLINE reinforce #-}
 

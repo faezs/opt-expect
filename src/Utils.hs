@@ -30,3 +30,8 @@ gaussInit = (\x -> 2 * x - 1)
 class (KnownNat n) => HasV a n where
   toV :: a -> V n R
   fromV :: V n R -> a
+
+
+-- | Convert from degrees to radians
+toRadians :: Floating a => a -> a
+toRadians deg = deg*pi/180

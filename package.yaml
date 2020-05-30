@@ -40,6 +40,7 @@ dependencies:
 - comonad
 - streamly >= 0.7.2
 - adjunctions
+- random-shuffle
 library:
   source-dirs: src
 
