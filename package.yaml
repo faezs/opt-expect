@@ -41,6 +41,8 @@ dependencies:
 - streamly >= 0.7.2
 - adjunctions
 - random-shuffle
+- monad-control
+- transformers-base
 library:
   source-dirs: src
 

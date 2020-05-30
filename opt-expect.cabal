@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ebaad85088e00199dd11b3e608a0ec657f48b45f62ea729eb573452987cf4a0c
+-- hash: 40b494aa6c0cadd576071638c6ce5a1c6b7ea8e7d04e175c3880b052729f5651
 
 name:           opt-expect
 version:        0.1.0.0
@@ -38,6 +38,7 @@ library
       MLUtils
       Policy
       PPO
+      RL
       SCG.Graph
       Utils
   other-modules:
@@ -58,11 +59,13 @@ library
     , hmatrix
     , keys
     , monad-bayes
+    , monad-control
     , mtl
     , random
     , random-shuffle
     , stm
     , streamly >=0.7.2
+    , transformers-base
     , vector
     , vector-sized
     , vector-space
@@ -89,12 +92,14 @@ executable opt-expect-exe
     , hmatrix
     , keys
     , monad-bayes
+    , monad-control
     , mtl
     , opt-expect
     , random
     , random-shuffle
     , stm
     , streamly >=0.7.2
+    , transformers-base
     , vector
     , vector-sized
     , vector-space
@@ -127,6 +132,7 @@ test-suite opt-expect-test
     , hspec
     , keys
     , monad-bayes
+    , monad-control
     , mtl
     , opt-expect
     , quickcheck-instances
@@ -134,6 +140,7 @@ test-suite opt-expect-test
     , random-shuffle
     , stm
     , streamly >=0.7.2
+    , transformers-base
     , vector
     , vector-sized
     , vector-space
