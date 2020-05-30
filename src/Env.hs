@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -10,6 +11,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Env where
 
 import Prelude hiding (length, zip, zipWith)
@@ -46,8 +48,20 @@ import qualified Data.Vector.Sized as VS
 
 import System.Random.Shuffle
 import Control.Monad.Random.Class (MonadRandom)
+import Control.Monad.Base
+import Control.Monad.Trans.Control
 
-type MonadEnv m = (MonadSample m, MonadAsync m)
+newtype MonadEnv a = MonadEnv { runMonadEnv :: SamplerIO a } deriving (Functor, Applicative, Monad)
+
+--instance MonadBase MonadEnv MonadEnv where
+--  liftBase = id-- sampleIO . runMonadEnv
+
+instance MonadBase IO MonadEnv where
+  liftBase = undefined
+
+instance MonadBaseControl IO MonadEnv where
+  liftBaseWith = undefined
+  restoreM = undefined
 
 type EnvState m s r = (MonadSample m) => StateT s m r
 
@@ -58,6 +72,8 @@ type RunEnv s a = ((s -> SamplerIO a)) -> EnvState SamplerIO s (Transition s a R
 type StochasticPolicy i h o s a = (PType i h o -> s -> SamplerIO a)
 
 type ValueFn i h = (PType i h 1 -> V i R -> V 1 R)
+
+
 
 
 data Transition s a r = Transition
