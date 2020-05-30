@@ -9,4 +9,5 @@
       
 ## 30-5-2019
 
-    -- Add PPO objective.
+    -- --Add PPO objective.--
+    -- Get rid of episodes and work with streams directly.
