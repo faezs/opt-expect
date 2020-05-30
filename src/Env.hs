@@ -17,7 +17,7 @@ import Prelude hiding (length, zip, zipWith)
 import ConCat.Misc
 import ConCat.Additive
 
-import Control.Monad.State.Lazy
+import Control.Monad.State.Strict
 import Control.Monad
 import Control.Monad.IO.Class
 
@@ -38,6 +38,7 @@ import Control.Monad.Bayes.Class
 import Control.Monad.Bayes.Sampler
 
 import qualified Streamly.Prelude as S
+import qualified Streamly.Internal.Prelude as S
 import Streamly
 import qualified Streamly.Data.Fold as FL
 import qualified Streamly.Internal.Data.Fold as FL
@@ -50,20 +51,33 @@ type MonadEnv m = (MonadSample m, MonadAsync m)
 
 type EnvState m s r = (MonadSample m) => StateT s m r
 
+type RLUpdate n i h o s a = V n (Transition s a R) -> Unop (PType i h o)
+
+type RunEnv s a = ((s -> SamplerIO a)) -> EnvState SamplerIO s (Transition s a R)
+
+type StochasticPolicy i h o s a = (PType i h o -> s -> SamplerIO a)
+
+type ValueFn i h = (PType i h 1 -> V i R -> V 1 R)
+
+
 data Transition s a r = Transition
   { s_t :: !s
   , s_tn :: !s
   , a_t :: !a
   , rw :: !r
   , done :: !Bool
-  , v_t :: r
-  , gAdv :: r
+  , stateValue :: !r
+  , advantage :: !r
+  , tdRes :: !r
   } deriving (Eq, Ord, Show, Generic)
 
+emptyTransition :: (Monoid s, Monoid a, Num r) => Transition s a r
+emptyTransition = Transition mempty mempty mempty 0 False 0 0 0
 
+{--
 data Episode s a r = Episode
-  { timesteps :: Int
-  , reward :: r
+  { timesteps :: !Int
+  , reward :: !r
   , trajectories :: [Transition s a r]
   , rewardToGo :: [r]
   , stateValue :: [r]
@@ -99,70 +113,92 @@ shuffleEpisodeM e@Episode{..} = do
 
 instance Num r => Monoid (Episode s a r) where
   mempty = Episode 0 0 [] [] [] []
+--}
+
+
+type EnvCon m s a r = (MonadSample m, MonadAsync m, Monoid s, Monoid a, Num r, Fractional r) 
 
 runEpisode ::
   forall m s a r.
-  ( Additive r,
-    Fractional r,
-    MonadSample m,
-    Num r
+  ( EnvCon m s a r
+  , MonadSample m
+  , MonadAsync m
   )
   => ((s -> m a) -> EnvState m s (Transition s a r))
   -> (s -> m a)
   -> (s -> r)
   -> s
-  -> m (Episode s a r)
-runEpisode stepFn agent valueFn initS = do
-  txs <- (takeWhileInclusive (\tx -> not . done $ tx))
-           <$> (evalStateT (mapM (\_ -> stepFn agent) [1..1000]) $ initS)
-  let
-    (r2g, rwT) = rw2Go txs
-    r2gTrajectories :: [Transition s a r]
-    r2gTrajectories = ((\(t, r)-> t{rw=r}) <$> (zip txs r2g))
-    gAEs = (advantage valueFn 0.2 0.9 r2gTrajectories)
-    sV = (valueFn . s_t) <$> txs
-    updatedTx = (\(t, g, sv)-> t{gAdv=g, v_t=sv}) <$> zip3 r2gTrajectories gAEs sV
-  return $ Episode
-    { timesteps = length txs
-    , reward = rwT
-    , trajectories = updatedTx
-    , rewardToGo = r2g
-    , stateValue = sV
-    , gAE = gAEs
-    }
-  where
-    rw2Go xs = let
-      r2g = (\r -> totalR - r)
-            <$> (scanl (\rAtT Transition{rw} -> rAtT + rw) 0 xs)
-      totalR = sumA (fmap rw xs)
-      in (r2g, totalR)
-    takeWhileInclusive _ [] = []
-    takeWhileInclusive p (x:xs) = x : if p x then takeWhileInclusive p xs else []
+  -> SerialT m (Transition s a r)
+-- Changes:
+-- 1) Accumulating scan over Transition Rewards then subtraction from total to get rewardToGo and put that inside the transitions
+-- 2) Generalized Advantage and state value scan over transitions
+runEpisode stepFn agent valueFn initS = let
+  episode :: SerialT m (Transition s a r)
+  episode = (S.takeWhile (\tx -> not . done $ tx))
+            $ (S.evalStateT initS (S.mapM (\_ -> stepFn agent) $ S.enumerateFromTo (1 :: Int) 1000))
+  epWithR2G = rw2Go episode
+  epWithAdvantage = (advantageF valueFn 0.99 0.2) epWithR2G 
+  in epWithAdvantage   
 {-# INLINE runEpisode #-}
 
 
+rw2Go :: forall m s a r. (EnvCon m s a r) => SerialT m (Transition s a r) -> SerialT m (Transition s a r)
+rw2Go xs = S.postscan (subRwByTotal <$> sumRw <*> accumRw) xs
+  where
+    sumRw :: FL.Fold m (Transition s a r) r
+    sumRw = FL.Fold (\x y -> return $ (x + rw y)) (pure $ 0) (pure)
+    subRwByTotal :: r -> Transition s a r -> Transition s a r
+    subRwByTotal tot t1 = t1{rw = tot - rw t1}
+    accumRw :: FL.Fold m (Transition s a r) (Transition s a r)
+    accumRw = FL.Fold step (pure emptyTransition) (pure)
+      where
+        step t0 t1 = return $ t1{rw = rw t0 + rw t1}
+{-# INLINE rw2Go #-}
+
+advantageF :: forall t m s a r. (IsStream t, EnvCon m s a r) => (s -> r) -> r -> r -> t m (Transition s a r) -> t m (Transition s a r)
+advantageF vf lambda gamma txs = S.scanl' (accAdv) emptyTransition $ S.zipWith (oneStepTDResidual vf) ((\i -> lambda * gamma ^ i) <$>  S.enumerateFrom (0 :: Int)) txs
+  where
+    accAdv t0@Transition{advantage} t1@Transition{tdRes} = t1{advantage = advantage + tdRes}
+{-# INLINE advantageF #-}
+
+oneStepTDResidual :: (Num r) => (s -> r) -> r -> Transition s a r -> Transition s a r
+oneStepTDResidual vf gamma t@Transition{..} = t{tdRes = rw + (gamma * vf s_tn) - (v_t), stateValue= v_t}
+  where
+    v_t = vf s_tn
+{-# INLINE oneStepTDResidual #-}
+
 {--
---}
+newtype Policy t m s a r i h o = Policy (t m (Transition s a R) -> PType i h o -> m (PType i h o))
 
-advantage :: (Num r) => (s -> r) -> r -> r -> [Transition s a r] -> [r]
-advantage vf lambda gamma txs = scanl (+) 0 $ zipWith (oneStepTDResidual vf) [lambda * gamma ^ i | i <- [0,1..]] txs
+runPolicy :: Policy t m s a r i h o -> t m (Transition s a R) -> PType i h o -> m PType i h o
+runPolicy (Policy policyFn) episode initP = policyFn episode initP 
 
-oneStepTDResidual :: (Num r) => (s -> r) -> r -> Transition s a r -> r
-oneStepTDResidual vf gamma Transition{..} = rw + (gamma * vf s_tn) - (vf s_t)
+epoch :: Int -> (PType i h o, PType i h 1) -> IO (PType i h o, PType i h 1)
+epoch nEps (polP, vfP) = S.fold (comb
+                                 <$> (policyFold @IO @s @a @i @h @o 80 learner polP)
+                                 <*> (valueFnFold @IO @s @a @i @h 80 vfLearner vfP)
+                                 <*> statisticsFold)
 
-type RLUpdate i h o s a = Episode s a R -> Unop (PType i h o)
 
-type RunEnv s a = ((s -> SamplerIO a)) -> EnvState SamplerIO s (Transition s a R)
+learn  :: forall m n i h o s a.
+  (RLCon s a i h o, KnownNat n, MonadAsync m)
+  => Int
+  -> R
+  -> R
+  -> SerialT m (Transition s a R)
+  -> PType i h o
+  -> m (PType i h o)
+learn = undefined
 
-type StochasticPolicy i h o s a = (PType i h o -> s -> SamplerIO a)
-
-type ValueFn i h = (PType i h 1 -> V i R -> V 1 R)
-
-runEpochs :: forall s a i h o. (HasV s i, HasV a o, KnownNat h, Show s, Show a)
+runEpochs :: forall t m n s a i h o.
+  ( HasV s i, HasV a o, KnownNat h
+  , KnownNat n, Show s, Show a
+  , IsStream t, MonadSample m, MonadAsync m
+  )
   => Int
   -> Int
-  -> (RLUpdate i h o s a)
-  -> (RLUpdate i h 1 s a)
+  -> (RLUpdate n i h o s a)
+  -> (RLUpdate n i h 1 s a)
   -> (RunEnv s a)
   -> (SamplerIO s)
   -> StochasticPolicy i h o s a
@@ -190,15 +226,11 @@ runEpochs nEpochs nEps learner vfLearner episodeFn initStateM agent valueFn polP
           wrapDelta :: (PType i h o, PType i h 1) -> (PType i h o, PType i h 1) -> IO (PType i h o, PType i h 1)
           wrapDelta (p, v) (p', v') = putStrLn ("average policy parameter delta: \n" <> (show $ sumA (p ^-^ p')))
                                       >> return (p', v')
-      epoch :: Int -> (PType i h o, PType i h 1) -> IO (PType i h o, PType i h 1)
-      epoch nEps (polP, vfP) = S.fold (comb
-                                       <$> (policyFold @IO @s @a @i @h @o 80 learner polP)
-                                       <*> (valueFnFold @IO @s @a @i @h 80 vfLearner vfP)
-                                       <*> statisticsFold)
+      
                          (episodes polP vfP nEps)
       comb :: PType i h o -> PType i h 1 -> () -> (PType i h o, PType i h 1)
       comb p v () = (p, v)
-      episodes :: (IsStream t) => PType i h o -> PType i h 1 -> Int -> t IO (Episode s a R)
+      episodes :: (IsStream t) => PType i h o -> PType i h 1 -> Int -> t IO (Transition s a R)
       episodes polP vfP nEps = serially
         -- $ S.mapM shuffleEpisodeM
         $ S.replicateM nEps
@@ -207,14 +239,14 @@ runEpochs nEpochs nEps learner vfLearner episodeFn initStateM agent valueFn polP
 --{-# INLINE runEpochs #-}
 
 
-policyFold :: forall m s a i h o. (MonadRandom m, MonadAsync m, HasV s i, HasV a o, KnownNat h)
+policyFold :: forall m n s a i h o. (MonadRandom m, MonadAsync m, HasV s i, HasV a o, KnownNat h, KnownNat n)
   => Int
-  -> (RLUpdate i h o s a)
+  -> (RLUpdate n i h o s a)
   -> PType i h o
-  -> FL.Fold m (Episode s a R) (PType i h o)
+  -> FL.Fold m (V n (Transition s a R)) (PType i h o)
 policyFold nIter = \policyUpdate initP -> FL.Fold (step policyUpdate) (pure initP) (finish)
   where
-    step :: (Episode s a R -> Unop (PType i h o)) -> (PType i h o) -> Episode s a R -> m (PType i h o)
+    step :: (t m (Transition s a R) -> Unop (PType i h o)) -> (PType i h o) -> t m (Transition s a R) -> m (PType i h o)
     step pu p ep = (return . fromJust) =<< (S.fold FL.last
                    $ S.take nIter
                    $ S.iterateM (\p' -> (\ep' -> return $ pu ep' p') =<< (shuffleEpisodeM ep)) (pure $ p))
@@ -223,14 +255,14 @@ policyFold nIter = \policyUpdate initP -> FL.Fold (step policyUpdate) (pure init
 --{-# INLINE policyFold #-}
 
 
-valueFnFold :: forall m s a i h . (MonadRandom m, MonadAsync m, HasV s i, KnownNat h)
+valueFnFold :: forall m n s a i h . (MonadRandom m, MonadAsync m, HasV s i, KnownNat h, KnownNat n)
   => Int
-  -> (RLUpdate i h 1 s a)
+  -> (RLUpdate n i h 1 s a)
   -> PType i h 1
-  -> FL.Fold m (Episode s a R) (PType i h 1)
+  -> FL.Fold m (V n (Transition s a R)) (PType i h 1)
 valueFnFold nIter = \valueUpdate initP -> FL.Fold (step valueUpdate) (pure initP) finish
   where
-    step :: (Episode s a R -> Unop (PType i h 1)) -> (PType i h 1) -> Episode s a R -> m (PType i h 1)
+    step :: (t m (Transition s a R) -> Unop (PType i h 1)) -> (PType i h 1) -> t m (Transition s a R) -> m (PType i h 1)
     step vu p ep = (return . fromJust) =<< (S.fold FL.last
                    $ S.take nIter
                    $ S.iterateM (\p' -> (\ep' -> return $ vu ep' p') =<< (shuffleEpisodeM ep)) (pure $ p)) 
@@ -239,12 +271,12 @@ valueFnFold nIter = \valueUpdate initP -> FL.Fold (step valueUpdate) (pure initP
 --{-# INLINE valueFnFold #-}
 
 
-statisticsFold :: forall m s a. (MonadIO m) => FL.Fold m (Episode s a R) ()
+statisticsFold :: forall m s a. (MonadIO m) => FL.Fold m (Transition s a R) ()
 statisticsFold = FL.Fold (step) begin end
   where
     begin = pure (0, 0, 0)
-    step :: (R, R, R) -> Episode s a R -> m (R, R, R)
-    step (rTotal, svTotal, len) Episode{..} = return $ ((reward + rTotal), (svTotal + sumA (stateValue ^-^ rewardToGo)), len + 1)
+    step :: (R, R, R) -> t m (Transition s a R) -> m (R, R, R)
+    step (rTotal, svTotal, len) tx = return $ ((reward + rTotal), (svTotal + sumA (stateValue ^-^ rewardToGo)), len + 1)
     end (rTotal, svTotal, len) = (liftIO . putStrLn $
                         "average reward: " <> (show $ round $ rTotal / len)
                         <> " average sv-error: " <> (show $ round $ svTotal / len) 
@@ -275,4 +307,5 @@ weightDelta ps vs = do
           mean fs = zipWith (/) (fmap sumA fs) (fmap (fromIntegral length) fs)
           stdDev :: f (g a) -> f a
           stdDev fs = (fmap (\f-> f ^-^ mean f) fs) ^/ (sumA $ mean fs)
+--}
 --}

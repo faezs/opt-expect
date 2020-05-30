@@ -35,6 +35,7 @@ import qualified Data.Vector.Generic as VG
 
 import GHC.Generics hiding (R)
 import GHC.TypeLits
+import Data.Proxy
 import Data.Finite
 
 import Utils
@@ -72,69 +73,68 @@ gaussAgent :: forall m i h o s a. (MonadSample m, HasV s i, HasV a o, KnownNat h
 gaussAgent = \mu std s -> fromV <$> (uncurry sampleGaussian) (forkV (policy mu, policy std) $ toV s)
 {-# INLINE gaussAgent #-}
 
+minibatch :: forall n t m s a r. (IsStream t, Monad m, KnownNat n) => t m (Transition s a r) -> t m (V n (Transition s a r))
+minibatch trajectories = ((fromJust . VS.fromList @n) <$> S.chunksOf (fromInteger $ natVal (Proxy @n)) FL.toList trajectories)
+{-# INLINE minibatch #-}
 
 
 {----------------------------------- PPO-Clip ------------------------------------------}
 
 
 type RLCon s a i h o =  (KnownNat i, KnownNat h, KnownNat o, HasV s i, HasV a o)
-
-type AdvantageFn s a i h = (RLCon s a i h 1) => (PType i h 1 -> s -> a -> R)
-
-type Advantage = R
-
 type KnownNat3 a b c = (KnownNat a, KnownNat b, KnownNat c)
 
-valueFnLearn :: forall s a i h. (HasV s i, KnownNat h) => (PType i h 1 -> V i R -> V 1 R) -> R -> Episode s a R -> PType i h 1 -> PType i h 1
+valueFnLearn :: forall n s a i h. (HasV s i, KnownNat h, KnownNat n) => (PType i h 1 -> V i R -> V 1 R) -> R -> V n (Transition s a R) -> PType i h 1 -> PType i h 1
 valueFnLearn = \valueFn gamma eps vParams -> (steps valueFn gamma (trainingPairs eps)) vParams
   where
-    trainingPairs :: Episode s a R -> [(V i R, V 1 R)]
-    trainingPairs = \Episode{..} -> ((\Transition{..} -> (toV s_t, VS.singleton rw)) <$> trajectories)
+    trainingPairs :: V n (Transition s a R) -> V n (V i R, V 1 R)
+    trainingPairs = \trajectories -> ((\Transition{..} -> (toV s_t, VS.singleton rw)) <$> trajectories)
 {-# INLINE valueFnLearn #-}
 
 
--- chunksOf :: (IsStream t, Monad m) => Int -> Fold m a b -> t m a -> t m b
+type RLFold n m s a r i h o = (RLCon s a i h o, KnownNat n, MonadAsync m)
 
-ppoUpdate  :: forall m n i h o s a.
-  (RLCon s a i h o, KnownNat n, MonadAsync m)
-  => Int
+ppoUpdate  :: forall n t m i h o s a.
+  (RLCon s a i h o, KnownNat n, MonadAsync m, IsStream t)
+  => R
   -> R
-  -> R
-  -> SerialT m (Transition s a R)
+  -> t m (Transition s a R)
   -> PType i h o
   -> m (PType i h o)
-ppoUpdate batchSize lr eta trajectories pi = do
+ppoUpdate lr eta trajectories pi = do
   pis <- S.fold @m FL.last
-         $ S.postscan (runner pi)
-         ((fromJust . VS.fromList @n) <$> S.chunksOf batchSize FL.toList trajectories)
+         $ S.postscan (ppoBatch @n lr eta pi)
+         $ adapt $ minibatch @n trajectories
   let (piOld, piNew) = fromJust $ pis
   return piNew
+
+
+ppoBatch :: forall n m s a r i h o. RLFold n m s a r i h o => R -> R -> PType i h o -> FL.Fold m (V n (Transition s a R)) (PType i h o, PType i h o)
+ppoBatch lr eta pi = FL.Fold step begin end
   where
-    runner :: PType i h o -> FL.Fold m (V n (Transition s a R)) (PType i h o, PType i h o) 
-    runner pi = FL.Fold step begin end
-      where
-        begin :: m (PType i h o, PType i h o)
-        begin = pure $ (pi, pi)
-        step :: (PType i h o, PType i h o) -> V n (Transition s a R) -> m (PType i h o, PType i h o)
-        step (piOld, piNew) tx = pure $ (piNew, ppoGrad lr eta tx piOld piNew)
-        end :: (PType i h o, PType i h o) -> m (PType i h o, PType i h o)
-        end v = (return @m) v
-{-# INLINE ppoUpdate #-}
-        
-ppoGrad :: forall n i h o s a. (RLCon s a i h o, KnownNat n) => R -> R -> V n (Transition s a R) -> PType i h o -> Unop (PType i h o)
-ppoGrad lr eta trajectories piOld pi = snd $ gradR batchLoss (piOld, pi)
-  where
+    begin :: m (PType i h o, PType i h o)
+    begin = pure $ (pi, pi)
+    step :: (PType i h o, PType i h o) -> V n (Transition s a R) -> m (PType i h o, PType i h o)
+    step (piOld, piNew) tx = pure $ (piNew, piNew ^+^ (lr *^ ppoGrad eta tx piOld piNew))
+    end :: (PType i h o, PType i h o) -> m (PType i h o, PType i h o)
+    end v = (return @m) v
+{-# INLINE ppoBatch #-}
+
+ppoGrad :: forall n i h o s a. (RLCon s a i h o, KnownNat n) => R -> V n (Transition s a R) -> PType i h o -> Unop (PType i h o)
+ppoGrad = \eta trajectories piOld pi -> let
     batchLoss :: (PType i h o, PType i h o) -> R
-    batchLoss (pi', pi) = (sumA $ (\tx -> ppoLoss eta tx pi' pi) <$> trajectories) / (fromIntegral . VS.length $ trajectories) 
+    batchLoss (pi', pi) = (sumA $ (\tx -> ppoLoss eta tx pi' pi) <$> trajectories)
+                          / (fromIntegral . natVal $ Proxy @n)
+    in snd $ gradR batchLoss (piOld, pi)
 --    txGrad = gradR (\(pi, piOld) -> ppoLoss eta tx 1 pi' piOld)
 {-# INLINE ppoGrad #-}
 
 ppoLoss :: forall i h o s a. (RLCon s a i h o) => R -> Transition s a R -> PType i h o -> PType i h o -> R
-ppoLoss eta Transition{..} thetaOld theta = min (policyRatio theta thetaOld (toV s_t) (toV a_t) * gAdv) (g eta gAdv)
+ppoLoss = \eta Transition{..} thetaOld theta -> min (policyRatio theta thetaOld (toV s_t) (toV a_t) * advantage) (g eta advantage)
 {-# INLINE ppoLoss #-}
 
 policyRatio :: (KnownNat3 i h o) => PType i h o -> PType i h o -> V i R -> V o R -> R
-policyRatio pi pi' s a = (logProb pi s a / logProb pi' s a)
+policyRatio = \pi pi' s a -> (logProb pi s a / logProb pi' s a)
 {-# INLINE policyRatio #-}
 
 g :: R -> R -> R
@@ -148,14 +148,14 @@ g eta adv
 {-------------------------------- Vanilla Policy Gradient -----------------------------}
 
 
-policyGradient :: forall i h o s a. (KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => R -> Episode s a R -> Unop (PType i h o)
-policyGradient = \lr Episode{trajectories} params -> params ^+^ (lr *^ ((gradLogProbExp trajectories) params))
+policyGradient :: forall n i h o s a. (KnownNat n, KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => R -> V n (Transition s a R) -> Unop (PType i h o)
+policyGradient = \lr trajectories params -> params ^+^ (lr *^ ((gradLogProbExp trajectories) params))
 {-# INLINE policyGradient #-}
 
 
 -- Expectation over the grad log prob for all trajectories of an episode
-gradLogProbExp :: forall i h o s a. (KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => [Transition s a R] -> (Unop (PType i h o))
-gradLogProbExp = \trajectories policyParams -> expectation $ (\(Transition{..}) -> gradLogProb gAdv (toV s_t) (toV a_t) policyParams) <$> trajectories
+gradLogProbExp :: forall n i h o s a. (KnownNat n, KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => V n (Transition s a R) -> (Unop (PType i h o))
+gradLogProbExp = \trajectories policyParams -> expectation $ (\(Transition{..}) -> gradLogProb advantage (toV s_t) (toV a_t) policyParams) <$> trajectories
 {-# INLINE gradLogProbExp #-}
 
 
