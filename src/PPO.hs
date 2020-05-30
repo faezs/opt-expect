@@ -107,7 +107,7 @@ ppoUpdate lr eta trajectories pi = do
          $ adapt $ minibatch @n trajectories
   let (piOld, piNew) = fromJust $ pis
   return piNew
-
+{-# INLINE ppoUpdate #-}
 
 ppoBatch :: forall n m s a r i h o. RLFold n m s a r i h o => R -> R -> PType i h o -> FL.Fold m (V n (Transition s a R)) (PType i h o, PType i h o)
 ppoBatch lr eta pi = FL.Fold step begin end
