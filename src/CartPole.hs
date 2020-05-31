@@ -16,6 +16,7 @@ import Control.Arrow
 import Utils
 import qualified Data.Vector.Sized as VS
 import Data.Maybe (fromJust)
+import Data.Default
 
 import Env
 
@@ -75,6 +76,8 @@ data CPState = CPState
   , thetadot :: !R -- pole velocity
   } deriving (Eq, Ord, Show)
 
+instance Default CPState where
+  def = CPState 0 0 0 0
 
 
 instance HasV CPState 4 where
@@ -83,6 +86,9 @@ instance HasV CPState 4 where
     where cpX:xdot:theta:thetadot:[] = VS.toList v
 
 data CPAct = PushLeft | PushRight deriving (Eq, Ord, Show, Enum)
+
+instance Default CPAct where
+  def = PushRight
 
 instance HasV CPAct 2 where
   toV PushLeft = fromJust $ VS.fromList @2 [1, 0]
@@ -170,7 +176,7 @@ stepCP' c@CPConf{..} actor = do
 stepCP :: forall m. (MonadSample m) => (CPState -> m CPAct) -> EnvState m CPState CPTrans
 stepCP = stepCP' cartPoleDef
 
-runCPEpisode ::  CPState -> (CPState -> SamplerIO CPAct) -> (CPState -> R) -> SerialT SamplerIO CPTrans
+runCPEpisode ::  CPState -> (CPState -> MonadEnv CPAct) -> (CPState -> R) -> SerialT MonadEnv CPTrans
 runCPEpisode i a v = runEpisode (stepCP) a v i
 
 

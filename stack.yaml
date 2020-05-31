@@ -59,6 +59,7 @@ extra-deps:
       - .
   - fusion-plugin-0.1.1@sha256:0f0a6fc5770619ef56d3dc64bc53f59f08f33c7bb6fe9f6b7e548577d97340ef,1890
   - fusion-plugin-types-0.1.0
+  - perfect-vector-shuffle-0.1.1.1@sha256:e05f719d3eb7eb680d6b94af59a3771e4ea6f9aa4e3cfb30e3048c2ac9520ee3,4023
 
 #  - git: git@github.com:hasktorch/hasktorch.git
 #    commit: 61eccc61ddf1b6334bfd6e8344620006174b1bef

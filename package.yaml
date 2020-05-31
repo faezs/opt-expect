@@ -43,6 +43,10 @@ dependencies:
 - random-shuffle
 - monad-control
 - transformers-base
+- exceptions
+- data-default
+- perfect-vector-shuffle
+
 library:
   source-dirs: src
 
@@ -75,4 +79,3 @@ tests:
     - QuickCheck
     - checkers
     - quickcheck-instances
-

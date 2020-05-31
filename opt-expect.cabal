@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 40b494aa6c0cadd576071638c6ce5a1c6b7ea8e7d04e175c3880b052729f5651
+-- hash: 09e2d900af63e4cceb9994ae6dea24759341e8751d9b9fbefefdc0af31e247e1
 
 name:           opt-expect
 version:        0.1.0.0
@@ -54,6 +54,8 @@ library
     , concat-examples
     , concat-plugin
     , containers
+    , data-default
+    , exceptions
     , finite-typelits
     , ghc-prim
     , hmatrix
@@ -61,6 +63,7 @@ library
     , monad-bayes
     , monad-control
     , mtl
+    , perfect-vector-shuffle
     , random
     , random-shuffle
     , stm
@@ -87,6 +90,8 @@ executable opt-expect-exe
     , concat-examples
     , concat-plugin
     , containers
+    , data-default
+    , exceptions
     , finite-typelits
     , ghc-prim
     , hmatrix
@@ -95,6 +100,7 @@ executable opt-expect-exe
     , monad-control
     , mtl
     , opt-expect
+    , perfect-vector-shuffle
     , random
     , random-shuffle
     , stm
@@ -126,6 +132,8 @@ test-suite opt-expect-test
     , concat-examples
     , concat-plugin
     , containers
+    , data-default
+    , exceptions
     , finite-typelits
     , ghc-prim
     , hmatrix
@@ -135,6 +143,7 @@ test-suite opt-expect-test
     , monad-control
     , mtl
     , opt-expect
+    , perfect-vector-shuffle
     , quickcheck-instances
     , random
     , random-shuffle
