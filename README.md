@@ -10,7 +10,7 @@ Parametric Policies (gaussian and categorical) can be found in the [Policy modul
 
 SGD is currently how concat does it, but there's also work ongoing on an implementation of [ADAM](https://arxiv.org/abs/1412.6980) so optimization works faster. This can be found [here](src/Adam.hs)
 
-There is also an abstraction for defining and running environments using [streamly](https://github.com/composewell/streamly) for generating streams of trajectories and calculating generalized advantage estimates on them in [Env](src/Env.hs).
+There is also an abstraction for defining and running environments using [streamly](https://github.com/composewell/streamly) for generating streams of trajectories and calculating generalized advantage estimates on them in [Env](src/Env.hs). An example of how to build environments that are compatible with the constraints on the type signature of [runEpisodes](src/Env.hs#L133) can be found [here](src/CartPole.hs) 
 
 ## Future Work
 
