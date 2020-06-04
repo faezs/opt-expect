@@ -12,7 +12,10 @@ SGD is currently how concat does it, but there's also work ongoing on an impleme
 
 There is also an abstraction for defining and running environments using [streamly](https://github.com/composewell/streamly) for generating streams of trajectories and calculating generalized advantage estimates on them in [Env](src/Env.hs).
 
+## Future Work
+
 On the roadmap is an implementation of Stochastic Computational Graphs implemented perhaps using the [circuit abstraction](https://github.com/conal/concat/blob/master/examples/src/ConCat/Circuit.hs) provided by concat.
+Execution on GPUs, whether by switching out the NN stuff for hasktorch or haskell/tensorflow or by figuring out (or more likely waiting for) how conal means to implement compilation to GPUs with concat.
 
 ## Running
 Fairly straightforward if you have stack
