@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 09e2d900af63e4cceb9994ae6dea24759341e8751d9b9fbefefdc0af31e247e1
+-- hash: 3a715498af57f8bcd5a0063dc24b481c8337a8e4f3745683364fba8787b9bebd
 
 name:           opt-expect
 version:        0.1.0.0
@@ -29,17 +29,20 @@ source-repository head
 
 library
   exposed-modules:
-      AD.SimpleEssence
       Adam
       CartPole
+      CircMisc
       DDQN
       Env
+      GATs
       Lib
       MLUtils
       Policy
       PPO
       RL
       SCG.Graph
+      Test
+      TestE
       Utils
   other-modules:
       Paths_opt_expect
@@ -48,6 +51,7 @@ library
   build-depends:
       MonadRandom
     , adjunctions
+    , algebraic-graphs
     , base >=4.7 && <5
     , comonad
     , concat-classes
@@ -57,6 +61,7 @@ library
     , data-default
     , exceptions
     , finite-typelits
+    , fusion-plugin
     , ghc-prim
     , hmatrix
     , keys
@@ -84,6 +89,7 @@ executable opt-expect-exe
   build-depends:
       MonadRandom
     , adjunctions
+    , algebraic-graphs
     , base >=4.7 && <5
     , comonad
     , concat-classes
@@ -93,6 +99,7 @@ executable opt-expect-exe
     , data-default
     , exceptions
     , finite-typelits
+    , fusion-plugin
     , ghc-prim
     , hmatrix
     , keys
@@ -125,6 +132,7 @@ test-suite opt-expect-test
       MonadRandom
     , QuickCheck
     , adjunctions
+    , algebraic-graphs
     , base >=4.7 && <5
     , checkers
     , comonad
@@ -135,6 +143,7 @@ test-suite opt-expect-test
     , data-default
     , exceptions
     , finite-typelits
+    , fusion-plugin
     , ghc-prim
     , hmatrix
     , hspec

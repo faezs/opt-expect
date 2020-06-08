@@ -12,7 +12,7 @@
 module Policy where
 
 import Control.Monad.Bayes.Class
-import Utils
+import Utils hiding (R)
 
 import ConCat.Misc
 import ConCat.AltCat ()

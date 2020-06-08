@@ -38,7 +38,7 @@ import GHC.TypeLits
 import Data.Proxy
 import Data.Finite
 
-import Utils
+import Utils hiding (R)
 import Control.Monad.Bayes.Class (MonadSample)
 import Policy
 import Env
@@ -65,17 +65,13 @@ catAgent :: forall m i h o s a. (MonadSample m, HasV s i, HasV a o, Enum a, Know
 catAgent = \ps s -> toEnum <$> (sampleCat . (softmax . policy $ ps) . toV) s
 {-# INLINE catAgent #-}
 
-forkV :: forall i o. (KnownNat i, KnownNat o) => ((V i --> V o) R, (V i --> V o) R) -> (V i R -> (V o R, V o R)) 
+forkV :: forall i o o'. (KnownNat i, KnownNat o, KnownNat o') => ((V i --> V o) R, (V i --> V o') R) -> (V i R -> (V o R, V o' R)) 
 forkV = fork
 {-# INLINE forkV #-}
 
 gaussAgent :: forall m i h o s a. (MonadSample m, HasV s i, HasV a o, KnownNat h) => PType i h o -> PType i h o -> s -> m a
 gaussAgent = \mu std s -> fromV <$> (uncurry sampleGaussian) (forkV (policy mu, policy std) $ toV s)
 {-# INLINE gaussAgent #-}
-
-minibatch :: forall n t m s a r. (IsStream t, Monad m, KnownNat n) => t m (Transition s a r) -> t m (V n (Transition s a r))
-minibatch trajectories = ((fromJust . VS.fromList @n) <$> S.chunksOf (fromInteger $ natVal (Proxy @n)) FL.toList trajectories)
-{-# INLINE minibatch #-}
 
 
 {----------------------------------- PPO-Clip ------------------------------------------}
@@ -121,16 +117,11 @@ ppoBatch lr eta pi = FL.Fold step begin end
 {-# INLINE ppoBatch #-}
 
 ppoGrad :: forall n i h o s a. (RLCon s a i h o, KnownNat n) => R -> V n (Transition s a R) -> PType i h o -> Unop (PType i h o)
-ppoGrad = \eta trajectories piOld pi -> let
-    batchLoss :: (PType i h o, PType i h o) -> R
-    batchLoss (pi', pi) = (sumA $ (\tx -> ppoLoss eta tx pi' pi) <$> trajectories)
-                          / (fromIntegral . natVal $ Proxy @n)
-    in snd $ gradR batchLoss (piOld, pi)
---    txGrad = gradR (\(pi, piOld) -> ppoLoss eta tx 1 pi' piOld)
+ppoGrad = \eta trajectories piOld pi -> gradR (\p -> (sumA $ ((\tx -> (ppoLoss eta tx p pi)) <$> (preprocTx @s @a @i @o <$> trajectories)))) piOld
 {-# INLINE ppoGrad #-}
 
-ppoLoss :: forall i h o s a. (RLCon s a i h o) => R -> Transition s a R -> PType i h o -> PType i h o -> R
-ppoLoss = \eta Transition{..} thetaOld theta -> min (policyRatio theta thetaOld (toV s_t) (toV a_t) * advantage) (g eta advantage)
+ppoLoss :: forall i h o s a. (KnownNat3 i h o) => R -> (V i R, V o R, R) -> PType i h o -> PType i h o -> R
+ppoLoss eta = \ (state, action, advantage) thetaOld theta -> min ((policyRatio theta thetaOld state action) * advantage) (g eta advantage)
 {-# INLINE ppoLoss #-}
 
 policyRatio :: (KnownNat3 i h o) => PType i h o -> PType i h o -> V i R -> V o R -> R
@@ -138,17 +129,18 @@ policyRatio = \pi pi' s a -> (logProb pi s a / logProb pi' s a)
 {-# INLINE policyRatio #-}
 
 g :: R -> R -> R
-g eta adv
-  | adv >= 0 = (1 + eta) * adv
-  | otherwise = (1 - eta) * adv
+g = \eta adv -> if (adv >= 0) then (1 + eta) * adv else (1 - eta) * adv
 {-# INLINE g #-}
 
+preprocTx :: forall s a i o. (HasV s i, HasV a o) => (Transition s a R) -> (V i R, V o R, R)
+preprocTx = (\Transition{..} -> (toV s_t, toV a_t, advantage))
+{-# INLINE preprocTx #-}
 
 
 {-------------------------------- Vanilla Policy Gradient -----------------------------}
 
 
-policyGradient :: forall n i h o s a. (KnownNat n, KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => R -> V n (Transition s a R) -> Unop (PType i h o)
+policyGradient :: forall n s a i h o. (KnownNat n, KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => R -> V n (Transition s a R) -> Unop (PType i h o)
 policyGradient = \lr trajectories params -> params ^+^ (lr *^ ((gradLogProbExp trajectories) params))
 {-# INLINE policyGradient #-}
 
@@ -162,7 +154,7 @@ gradLogProbExp = \trajectories policyParams -> expectation $ (\(Transition{..}) 
 -- The log probablitity is multiplied by the log prob of the action given the state to avoid threading it though
 -- into the expectation, which is just a sum 
 gradLogProb :: forall i h o. (KnownNat h, KnownNat i, KnownNat o) => R -> V i R -> V o R -> PType i h o -> PType i h o
-gradLogProb = \genAdv st act params -> (prob params st act) *^ (gradR (\ps -> genAdv * (logProb ps st act)) params)
+gradLogProb = \genAdv st act params -> (gradR (\ps -> genAdv * (logProb ps st act)) params) -- (genAdv * (logProb params st act)) *^ params --
 {-# INLINE gradLogProb #-}
 
 logProb :: forall i h o. (KnownNat h, KnownNat i, KnownNat o) => PType i h o -> V i R -> V o R -> R 

@@ -46,6 +46,8 @@ dependencies:
 - exceptions
 - data-default
 - perfect-vector-shuffle
+- fusion-plugin
+- algebraic-graphs
 
 library:
   source-dirs: src

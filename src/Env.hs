@@ -14,6 +14,9 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
+{-# OPTIONS_GHC -fplugin=Fusion.Plugin #-}
+
 module Env where
 
 import Prelude hiding (length, zip, zipWith)
@@ -28,13 +31,15 @@ import Control.Monad.IO.Class
 import Data.Key
 import Data.Foldable
 import Data.Traversable
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, isJust)
 import Data.Default
+import Data.Proxy
+
 
 import GHC.Generics hiding (R)
 import GHC.TypeLits
 
-import Utils
+import Utils hiding (R)
 import MLUtils (HasLayers(..), showPart)
 import ConCat.Deep
 
@@ -47,6 +52,9 @@ import qualified Streamly.Internal.Prelude as S
 import Streamly
 import qualified Streamly.Data.Fold as FL
 import qualified Streamly.Internal.Data.Fold as FL
+import qualified Streamly.Internal.Data.Unfold as UF
+import qualified Streamly.Internal.Data.Unfold.Types as UF
+import qualified Streamly.Internal.Data.Stream.StreamD.Type as STy
 import qualified Data.Vector.Sized as VS
 
 
@@ -74,6 +82,9 @@ instance MonadBaseControl IO MonadEnv where
 
 deriving instance MonadSample MonadEnv
 
+sampleIOE :: MonadEnv a -> IO a
+sampleIOE = sampleIO . runMonadEnv
+
 
 type EnvState m s r = (MonadSample m) => StateT s m r
 
@@ -100,35 +111,49 @@ data Transition s a r = Transition
 instance (Default s, Default a, Num r) => Default (Transition s a r) where
   def = Transition def def def 0 False 0 0 0
 
-
 type EnvCon m s a r = (MonadSample m, MonadAsync m, Default s, Default a, Num r, Fractional r) 
 
-rw2Go :: forall m s a r. (EnvCon m s a r) => SerialT m (Transition s a r) -> SerialT m (Transition s a r)
-rw2Go xs = S.postscan (subRwByTotal <$> sumRw <*> accumRw) xs
+{--
+totalR :: forall t m s a r. (IsStream t, EnvCon m s a r) => t m (Transition s a r) -> t m (Transition s a r)
+totalR xs = S.postscan accumRw xs
   where
-    sumRw :: FL.Fold m (Transition s a r) r
-    sumRw = FL.Fold (\x y -> return $ (x + rw y)) (pure $ 0) (pure)
-    subRwByTotal :: r -> Transition s a r -> Transition s a r
-    subRwByTotal tot t1 = t1{rw = tot - rw t1}
+    --sumRw :: FL.Fold m (Transition s a r) r
+    --sumRw = FL.Fold (\x y -> return $ (x + rw y)) (pure $ 0) (pure)
+    --subRwByTotal :: r -> Transition s a r -> Transition s a r
+    --subRwByTotal tot t1 = t1{rw = tot - rw t1}
     accumRw :: FL.Fold m (Transition s a r) (Transition s a r)
     accumRw = FL.Fold step (pure def) (pure)
       where
         step t0 t1 = return $ t1{rw = rw t0 + rw t1}
-{-# INLINE rw2Go #-}
+{-# INLINE totalR #-}
+--}
 
 advantageF :: forall t m s a r. (IsStream t, EnvCon m s a r) => (s -> r) -> r -> r -> t m (Transition s a r) -> t m (Transition s a r)
-advantageF vf lambda gamma txs = S.scanl' (accAdv) def $ S.zipWith (oneStepTDResidual vf) ((\i -> lambda * gamma ^ i) <$>  S.enumerateFrom (0 :: Int)) txs
+advantageF vf lambda gamma txs = S.postscan advFold $ S.zipWith (,) (S.enumerateFrom (0 :: Int)) txs
   where
-    accAdv t0@Transition{advantage} t1@Transition{tdRes} = t1{advantage = advantage + tdRes}
-{-# INLINE advantageF #-}
+    advFold :: FL.Fold m (Int, Transition s a r) (Transition s a r)
+    advFold = FL.Fold accAdv (pure (def @(Transition s a r))) (pure)
+    accAdv t0@Transition{advantage=advP, rw=rp} (i, t1@Transition{..}) =
+      pure $ t1{ rw = rp + rw
+               , advantage = advP + (lambda * gamma ^ i * oneStepTDResidual)
+               , tdRes = oneStepTDResidual
+               , stateValue = v_t
+               }
+      where
+        v_t = vf s_t
+        oneStepTDResidual = rw + (gamma * vf s_tn) - (v_t)
+--{-# INLINE advantageF #-}
 
-oneStepTDResidual :: (Num r) => (s -> r) -> r -> Transition s a r -> Transition s a r
-oneStepTDResidual vf gamma t@Transition{..} = t{tdRes = rw + (gamma * vf s_tn) - (v_t), stateValue= v_t}
-  where
-    v_t = vf s_tn
-{-# INLINE oneStepTDResidual #-}
+-- :: (Num r) => r -> r -> Transition s a r -> r
+--oneStepTDResidual v_t gamma t@Transition{..} = rw + (gamma * vf s_tn) - (v_t)
+--{-# INLINE oneStepTDResidual #-}
 
-
+minibatch :: forall n t m s a r. (IsStream t, Monad m, KnownNat n) => t m (Transition s a r) -> t m (V n (Transition s a r))
+minibatch trajectories = S.map (fromJust)
+                         $ S.takeWhile isJust
+                         $ (VS.fromList @n)
+                         <$> S.chunksOf (fromInteger $ natVal (Proxy @n)) FL.toList trajectories
+--{-# INLINE minibatch #-}
 
 runEpisode ::
   forall m s a r.
@@ -143,15 +168,28 @@ runEpisode ::
   -> SerialT m (Transition s a r)
 runEpisode stepFn agent valueFn initS = let
   episode :: SerialT m (Transition s a r)
-  episode = (S.takeWhile (\tx -> not . done $ tx))
+  episode = S.takeWhile (\tx -> not . done $ tx)
             $ (S.evalStateT initS (S.mapM (\_ -> stepFn agent) $ S.enumerateFromTo (1 :: Int) 1000))
-  epWithR2G = rw2Go episode
-  epWithAdvantage = (advantageF valueFn 0.99 0.2) epWithR2G 
-  in epWithAdvantage   
-{-# INLINE runEpisode #-}
+  epWithAdvantage = (advantageF valueFn 0.99 0.2) episode 
+  in epWithAdvantage
+--{-# INLINE runEpisode #-}
 
 
-
+unfoldEpisode ::
+  forall m s a r.
+  ( EnvCon m s a r
+  , MonadSample m
+  , MonadAsync m
+  )
+  => ((s -> m a) -> s -> m (Transition s a r))
+  -> (s -> m a)
+  -> s
+  -> UF.Unfold m s (Transition s a r)
+unfoldEpisode stepFn agent initS = UF.Unfold tn (stepFn agent)
+  where
+    tn :: (Transition s a r -> m (STy.Step (Transition s a r) (Transition s a r)))
+    tn t@Transition{..} = return $ if not done then STy.Yield t t else STy.Stop    
+{--
 runEpochs :: forall t m n s a i h o.
   ( HasV s i, HasV a o, KnownNat h
   , KnownNat n, Show s, Show a
@@ -191,43 +229,51 @@ runEpochs nEpochs nEps learner vfLearner episodeFn initStateM agent valueFn polP
       episodes polP vfP nEps = (\s -> runEpisode episodeFn (agent polP) ((wrapVF valueFn) vfP) s)
                                 =<< (S.replicateM nEps initStateM)
 --{-# INLINE runEpochs #-}
-
-
-
-minibatchLearn :: forall m n s a i h o. (MonadAsync m, HasV s i, HasV a o, KnownNat h, KnownNat n)
-  => Int
-  -> (RLUpdate n i h o s a)
-  -> PType i h o
-  -> FL.Fold m (V n (Transition s a R)) (PType i h o)
-minibatchLearn nIter = \updateFn initP -> FL.Fold (step updateFn) (pure initP) (finish)
-  where
-    step :: (V n (Transition s a R) -> Unop (PType i h o)) -> (PType i h o) -> V n (Transition s a R) -> m (PType i h o)
-    step pu p ep = (return . fromJust) =<< (S.fold FL.last
-                   $ S.take nIter
-                   $ S.iterateM (\p' -> (\ep' -> return $ pu ep' p')
-                                  =<< (shuffleSized ep))
-                                             (pure $ p))
-    finish :: (PType i h o) -> m (PType i h o)
-    finish = return
-{-# INLINE minibatchLearn #-}
+--}
 
 
 shuffleSized :: forall m n a. (MonadIO m, KnownNat n) => V n a -> m (V n a)
 shuffleSized v = (return . fromJust . VS.toSized @n) =<< (liftIO . shuffleM . VS.fromSized $ v)
-{-# INLINE shuffleSized #-}
+--{-# INLINE shuffleSized #-}
 
 
-minibatchStatistics :: forall m s a. (MonadIO m) => FL.Fold m (Transition s a R) ()
+
+data BatchStatistics = BatchStatistics
+  { batchReward :: R
+  , batchAdvantage :: R
+  , batchSVerror :: R
+  } deriving (Eq, Ord, Show)
+
+instance Semigroup BatchStatistics where
+  s1 <> s2 = BatchStatistics { batchReward = batchReward s1 + batchReward s2
+                             , batchAdvantage = batchAdvantage s1 + batchAdvantage s2
+                             , batchSVerror = batchSVerror s1 + batchSVerror s2
+                             }
+
+instance Monoid BatchStatistics where
+  mempty = BatchStatistics 0 0 0
+
+computeStats :: V n (Transition s a R) -> BatchStatistics
+computeStats = foldl (\b@BatchStatistics{..} t@Transition{..} -> b{batchReward = batchReward + rw
+                                                                  , batchAdvantage = batchAdvantage + advantage
+                                                                  , batchSVerror = batchSVerror + stateValue
+                                                                  }) mempty
+
+minibatchStatistics :: forall n m s a. (MonadIO m, KnownNat n) => FL.Fold m (V n (Transition s a R)) ()
 minibatchStatistics = FL.Fold (step) begin end
   where
-    begin = pure (0, 0, 0)
-    step :: (R, R, R) -> (V n (Transition s a R)) -> m (R, R, R)
-    step (rTotal, svTotal, len) tx = return $ ((reward + rTotal), (svTotal + sumA (stateValue ^-^ rewardToGo)), len + 1)
-    end (rTotal, svTotal, len) = (liftIO . putStrLn $
-                        "average reward: " <> (show $ round $ rTotal / len)
-                        <> " average sv-error: " <> (show $ round $ svTotal / len) 
-                        <> " nEpisodes : " <> (show . round $ len))
-{-# INLINE minibatchStatistics #-}
+    begin = pure mempty
+    step :: BatchStatistics -> (V n (Transition s a R)) -> m BatchStatistics
+    step b = return . computeStats
+    end BatchStatistics{..} = (liftIO . putStrLn $
+                        "average reward: " <> (show $ round $ batchReward / l)
+                        `vsep` " average stateValue: " <> (show $ batchSVerror / l) 
+                        `vsep` " average advantage estimate : " <> (show $ batchAdvantage / l)
+                         `vsep` "# Episodes: " <> (show . round $ l))
+      where
+        vsep a b = a <> "\n" <> b
+        l = (fromIntegral $ natVal (Proxy @n))
+--{-# INLINE minibatchStatistics #-}
 
 
 wrapVF :: (HasV s i, KnownNat h) => (PType i h 1 -> V i R -> V 1 R) -> (PType i h 1 -> s -> R)

@@ -6,15 +6,16 @@ import System.Random
 import qualified Data.Vector.Sized as VS
 import Control.Monad.State
 import GHC.TypeLits
-import ConCat.Misc
+import ConCat.Misc hiding (R)
 import ConCat.Deep
 import GHC.Generics hiding (R)
-
 
 
 type V = VS.Vector
 
 type PType i h o = ((V h --+ V o) :*: (V h --+ V h) :*: (V i --+ V h)) R
+
+type R = Double
 
 -- | Create an arbitrary functor filled with different random values.
 randF :: (Traversable f, Applicative f, Random a) => Int -> f a
@@ -35,3 +36,4 @@ class (KnownNat n) => HasV a n where
 -- | Convert from degrees to radians
 toRadians :: Floating a => a -> a
 toRadians deg = deg*pi/180
+{-# INLINE toRadians #-}
