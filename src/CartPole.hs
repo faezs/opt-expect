@@ -13,7 +13,7 @@ import Control.Monad.Bayes.Class
 import Control.Monad.Bayes.Sampler
 
 import Control.Arrow
-import Utils
+import Utils hiding (R)
 import qualified Data.Vector.Sized as VS
 import Data.Maybe (fromJust)
 import Data.Default

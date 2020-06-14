@@ -53,18 +53,22 @@ reinforce = do
   let
     policyNet = (gaussInit <$> randF 1 :: PType 4 16 2)
     valueNet = (randF 1 :: PType 4 16 1)
-  ps <- learnF 50 100 (policyNet, valueNet)
-  let (p, v) = fromJust ps
-  print (p ^-^ policyNet, v ^-^ valueNet)
+  traj <- sampleIOE $ S.head $ (minibatch @20) (eps 10 policyNet valueNet)
+  let
+    p' = ppoGrad 0.2 (fromJust traj) policyNet policyNet
+  print p'
   return ()
---{-# INLINE reinforce #-}
+{-# INLINE reinforce #-}
+
 
 
 eps :: Int -> PType 4 16 2 -> PType 4 16 1 -> SerialT MonadEnv (CPTrans)
 eps = \n pi vi -> 
   (\s -> runEpisode @MonadEnv stepCP (catAgent pi) (wrapVF valueFn vi) s) =<< (S.replicateM n initCP)
---{-# INLINE eps #-}
+{-# INLINE eps #-}
 
+--actor :: (KnownNat3 i h o) => Unop (PType i h o) 
+{--
 #ifdef PROFILE
 pgFold pf = minibatchLearn @MonadEnv @40 @CPState @CPAct @4 @16 @2 20 (\b px -> policyGradient 1e-2 b px) pf --policyGradient 1e-2 b px) pf
 --{-# INLINE pgFold #-}
@@ -77,7 +81,7 @@ vfFold vf = minibatchLearn @MonadEnv @40 @CPState @CPAct @4 @16 @1 20 (\b px -> 
 pgFold pf = minibatchLearn @MonadEnv @128 @CPState @CPAct @4 @16 @2 10 (\b px -> policyGradient 1e-2 b px) pf
 --{-# INLINE pgFold #-}
 
-vfFold vf = minibatchLearn @MonadEnv @128 @CPState @CPAct @4 @16 @1 10 (\b px -> valueFnLearn (valueFn) 1e-2 b px) vf
+vfFold vf = minibatchLearn @MonadEnv @128 @CPState @CPAct @4 @16 @1 80 (\b px -> valueFnLearn (valueFn) 1e-2 b px) vf
 --{-# INLINE vfFold #-}
 #endif
 
@@ -88,3 +92,4 @@ learnF nEpochs nEps (p, v) =
   where
     runPUpdate = S.iterateM (\ip -> S.fold ((\p v _ -> (p, v)) <$> pgFold ip <*> vfFold iv <*> minibatchStatistics)
 --{-# INLINE learnF #-}
+--}

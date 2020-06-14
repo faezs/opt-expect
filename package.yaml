@@ -38,7 +38,7 @@ dependencies:
 - finite-typelits
 - keys
 - comonad
-- streamly >= 0.7.2
+- streamly >= 0.7.1
 - adjunctions
 - random-shuffle
 - monad-control

@@ -140,13 +140,14 @@ preprocTx = (\Transition{..} -> (toV s_t, toV a_t, advantage))
 {-------------------------------- Vanilla Policy Gradient -----------------------------}
 
 
-policyGradient :: forall n s a i h o. (KnownNat n, KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => R -> V n (Transition s a R) -> Unop (PType i h o)
-policyGradient = \lr trajectories params -> params ^+^ (lr *^ ((gradLogProbExp trajectories) params))
+policyGradient :: forall n i h o s a p. (KnownNat n, HasV s i, HasV a o, KnownNat h) => R -> V n (Transition s a R) -> (PType i h o -> s -> a) ->  Unop (PType i h o)
+policyGradient = \lr trajectories pol params -> params ^+^ (lr *^ ((gradLogProbExp trajectories) params))
 {-# INLINE policyGradient #-}
 
+type ParamCon p = (Functor p, Zip p, Additive1 p)
 
 -- Expectation over the grad log prob for all trajectories of an episode
-gradLogProbExp :: forall n i h o s a. (KnownNat n, KnownNat i, KnownNat h, KnownNat o, HasV a o, HasV s i) => V n (Transition s a R) -> (Unop (PType i h o))
+gradLogProbExp :: forall n i h o s a. (KnownNat n, HasV s i, HasV a o, KnownNat h) => V n (Transition s a R) -> (Unop (PType i h o))
 gradLogProbExp = \trajectories policyParams -> expectation $ (\(Transition{..}) -> gradLogProb advantage (toV s_t) (toV a_t) policyParams) <$> trajectories
 {-# INLINE gradLogProbExp #-}
 
