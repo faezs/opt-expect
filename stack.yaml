@@ -49,14 +49,17 @@ extra-deps:
       - hardware
       - graphics
       - examples
+    # nix-sha256: 1a3z21n0ispcc4irggkwsclfbv87z1gb52lfafwx09n8bszr8c19
   - git: git@github.com:tweag/monad-bayes.git
     commit: 10a5ea4d6f1eb72ff4e2a5978485e93a48db061d
     subdirs:
       - .
+    # nix-sha256 1ndbbg15z168ivh04dqyx42s1c27vd5srqb6khq1p65bkmzfnbzb
   - git: git@github.com:composewell/streamly.git
     commit: a4b51db2d633ca209b18ee9eede5e1e49ef6a860
     subdirs:
       - .
+    # nix-sha256 14547zxr8n3c9f8ljnzb8q3z1rr3l2kdgrnh2vwr6ks4lawyb2hf
   - fusion-plugin-0.1.1@sha256:0f0a6fc5770619ef56d3dc64bc53f59f08f33c7bb6fe9f6b7e548577d97340ef,1890
   - fusion-plugin-types-0.1.0
   - perfect-vector-shuffle-0.1.1.1@sha256:e05f719d3eb7eb680d6b94af59a3771e4ea6f9aa4e3cfb30e3048c2ac9520ee3,4023

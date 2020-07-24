@@ -13,7 +13,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# OPTIONS_GHC -fplugin-opt=ConCat.Plugin:showResiduals #-}
-
+-- {-# OPTIONS_GHC -fplugin-opt=ConCat.Plugin:trace #-}
 module PPO where
 
 import Prelude hiding (zip, zipWith, length)
@@ -117,24 +117,24 @@ ppoBatch lr eta pi = FL.Fold step begin end
 {-# INLINE ppoBatch #-}
 
 ppoGrad :: forall n i h o s a. (RLCon s a i h o, KnownNat n) => R -> V n (Transition s a R) -> PType i h o -> Unop (PType i h o)
-ppoGrad = \eta trajectories piOld pi -> gradR (\p -> (sumA $ ((\tx -> (ppoLoss eta tx p pi)) <$> (preprocTx @s @a @i @o <$> trajectories)))) piOld
+ppoGrad = \eta trajectories piOld pi -> gradR (\p ->
+                                                 (normSqr $
+                                                  ((\Transition{..} ->  ppoLoss eta (toV s_t) (toV a_t) advantage p pi)
+                                                   <$> (trajectories)))) piOld
 {-# INLINE ppoGrad #-}
 
-ppoLoss :: forall i h o s a. (KnownNat3 i h o) => R -> (V i R, V o R, R) -> PType i h o -> PType i h o -> R
-ppoLoss eta = \ (state, action, advantage) thetaOld theta -> min ((policyRatio theta thetaOld state action) * advantage) (g eta advantage)
+ppoLoss :: forall i h o s a. (KnownNat3 i h o) => R -> V i R -> V o R -> R -> PType i h o -> PType i h o -> R
+ppoLoss = \ eta state action advantage thetaOld theta -> (min ((policyRatio theta thetaOld state action)) (g eta advantage))
 {-# INLINE ppoLoss #-}
 
 policyRatio :: (KnownNat3 i h o) => PType i h o -> PType i h o -> V i R -> V o R -> R
-policyRatio = \pi pi' s a -> (logProb pi s a / logProb pi' s a)
+policyRatio = \pi pi' s a -> ((logProb pi s a) / (logProb pi' s a))
 {-# INLINE policyRatio #-}
 
 g :: R -> R -> R
 g = \eta adv -> if (adv >= 0) then (1 + eta) * adv else (1 - eta) * adv
 {-# INLINE g #-}
 
-preprocTx :: forall s a i o. (HasV s i, HasV a o) => (Transition s a R) -> (V i R, V o R, R)
-preprocTx = (\Transition{..} -> (toV s_t, toV a_t, advantage))
-{-# INLINE preprocTx #-}
 
 
 {-------------------------------- Vanilla Policy Gradient -----------------------------}

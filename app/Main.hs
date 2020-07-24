@@ -8,7 +8,7 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fplugin-opt=ConCat.Plugin:showResiduals #-}
 
---{-# OPTIONS_GHC -fplugin-opt=ConCat.Plugin:trace #-}
+{-# OPTIONS_GHC -fplugin-opt=ConCat.Plugin:trace #-}
 
 --{-# OPTIONS_GHC -fsimpl-tick-factor=2500 #-}
 
@@ -39,6 +39,7 @@ import Data.Maybe (fromJust)
 import GHC.TypeLits
 import Data.Key
 import Data.Proxy
+import qualified Data.Vector.Sized as VS
 
 -- #define PROFILE
 
@@ -55,11 +56,13 @@ reinforce = do
     valueNet = (randF 1 :: PType 4 16 1)
   traj <- sampleIOE $ S.head $ (minibatch @20) (eps 10 policyNet valueNet)
   let
-    p' = ppoGrad 0.2 (fromJust traj) policyNet policyNet
-  print p'
+   p'' = p' policyNet (preprocTx . VS.head . fromJust $ traj)
+  print p''
   return ()
 {-# INLINE reinforce #-}
 
+p' = \p (s, a, r) -> gradR (\p' -> ppoLoss 0.2 s a r p') p
+{-# INLINE p' #-}
 
 
 eps :: Int -> PType 4 16 2 -> PType 4 16 1 -> SerialT MonadEnv (CPTrans)
