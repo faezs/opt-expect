@@ -13,7 +13,7 @@ import GHC.Generics hiding (R)
 import Data.Monoid
 import Control.Applicative
 import Control.Monad.Bayes.Class
-import Control.Monad.Trans.State hiding (get, modify', put)
+import Control.Monad.Trans.State.Strict hiding (get, modify', put)
 import Control.Monad.State.Class
 import Control.Monad.Trans.Class
 
@@ -90,8 +90,6 @@ apply :: forall m s a. Policy s a -> MarkovDecisionProcess m s a -> MarkovReward
 apply policy (MDP{ act }) = MP { step = \ s -> act s (policy s) } 
 
 
-
-applyS = undefined
 
 --totalReward :: forall m s. (MonadAsync m, MonadSample m, Num s) => s -> MarkovRewardProcess m s -> m r
 --totalReward initState rewardProcess = S.postscan FL.sum 
