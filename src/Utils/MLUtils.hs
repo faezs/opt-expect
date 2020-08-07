@@ -45,7 +45,7 @@ import           Text.Printf
 import           ConCat.Deep
 import           ConCat.Misc                         (sqr, result, cond)
 import           ConCat.Orphans                      (fstF, sndF)
-import Utils.Utils hiding (R)
+import Utils.Utils
 
 
 -- | Split a list of samples into training/testing sets.
