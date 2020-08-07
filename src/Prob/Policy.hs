@@ -9,10 +9,10 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Policy where
+module Prob.Policy where
 
 import Control.Monad.Bayes.Class
-import Utils hiding (R)
+import Utils.Utils
 
 import ConCat.Misc
 import ConCat.AltCat ()

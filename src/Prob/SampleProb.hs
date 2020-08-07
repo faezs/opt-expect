@@ -6,7 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
-module RL where
+module Prob.SampleProb where
 
 
 import Prelude hiding (zipWith)
@@ -17,7 +17,7 @@ import GHC.Generics ((:*:)(..))
 --import ConCat.GradientDescent
 import ConCat.Deep
 import ConCat.Misc
-import ConCat.DUtils
+import Utils.MLUtils
 import ConCat.Category
 import qualified Data.Vector.Sized as VS
 import           Data.Key     (Zip(..))
@@ -25,7 +25,7 @@ import           Data.Key     (Zip(..))
 import ConCat.Misc     (R)
 import ConCat.Rebox    ()  -- Necessary for reboxing rules to fire
 import ConCat.AltCat   ()  -- Necessary, but I've forgotten why.
-import ConCat.Classifiable
+import Utils.Classifiable
 --import ConCat.Free.VectorSpace hiding (V)
 
 -- Policy-Based RL

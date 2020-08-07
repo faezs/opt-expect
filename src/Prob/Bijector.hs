@@ -7,7 +7,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Bijector where
+module Prob.Bijector where
 
 import Prelude hiding (id, (.), lookup)
 import ConCat.Distribution

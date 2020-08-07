@@ -1,9 +1,9 @@
 {-# LANGUAGE DeriveGeneric #-}
 -- A Vocabulary for Gradient Estimation using Stochastic Computation Graphs
 
-module SCG where
+module SCG.SCG where
 
-import Data.Distributive (Distributive(..))
+--import Data.Distributive (Distributive(..))
 import Data.Functor.Rep (Representable(..))
 
 import GHC.Generics (Generic)
