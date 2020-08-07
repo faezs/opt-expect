@@ -3,7 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RankNTypes #-}
-module Adam where
+module Optimizers.Adam where
 
 import Prelude hiding (zipWith)
 import GHC.TypeLits
