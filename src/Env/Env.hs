@@ -17,7 +17,7 @@
 
 {-# OPTIONS_GHC -fplugin=Fusion.Plugin #-}
 
-module Env where
+module Env.Env where
 
 import Prelude hiding (length, zip, zipWith)
 
@@ -39,8 +39,8 @@ import Data.Proxy
 import GHC.Generics hiding (R)
 import GHC.TypeLits
 
-import Utils hiding (R)
-import MLUtils (HasLayers(..), showPart)
+import Utils.Utils hiding (R)
+import Utils.MLUtils (HasLayers(..), showPart)
 import ConCat.Deep
 
 
@@ -65,25 +65,8 @@ import Control.Monad.Trans.Control
 import Control.Monad.Catch
 
 
-newtype MonadEnv a = MonadEnv { runMonadEnv :: SamplerIO a } deriving (Functor, Applicative, Monad, MonadIO, Generic)
 
-instance MonadThrow MonadEnv where
-  throwM = MonadEnv . liftIO . throwM
-
-
-instance MonadBase IO MonadEnv where
-  liftBase = MonadEnv . liftIO
-
-instance MonadBaseControl IO MonadEnv where
-  type StM MonadEnv a = a
-  -- liftBaseWith :: ((forall a. m a -> IO (StM m a)) -> IO a) -> m a
-  liftBaseWith f = liftIO $ liftBaseWith @IO @IO (\run -> f (run . sampleIO . runMonadEnv)) 
-  restoreM a = liftIO $ restoreM @IO @IO a
-
-deriving instance MonadSample MonadEnv
-
-sampleIOE :: MonadEnv a -> IO a
-sampleIOE = sampleIO . runMonadEnv
+import Env.MonadEnv
 
 
 type EnvState m s r = (MonadSample m) => StateT s m r

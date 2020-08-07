@@ -5,7 +5,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
-module CartPole where
+module Env.CartPole where
 
 import ConCat.Misc
 import Control.Monad.State.Lazy
@@ -13,12 +13,13 @@ import Control.Monad.Bayes.Class
 import Control.Monad.Bayes.Sampler
 
 import Control.Arrow
-import Utils hiding (R)
+import Utils.Utils
 import qualified Data.Vector.Sized as VS
 import Data.Maybe (fromJust)
 import Data.Default
 
-import Env
+import Env.Env
+import Env.MonadEnv
 
 import Streamly
 import qualified Streamly.Prelude as S
