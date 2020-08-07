@@ -24,7 +24,7 @@ Maintainer  : capn.freako@gmail.com
 Stability   : experimental
 Portability : ?
 -}
-module MLUtils where
+module Utils.MLUtils where
 
 import Prelude hiding (zipWith, zip)
 
@@ -45,7 +45,7 @@ import           Text.Printf
 import           ConCat.Deep
 import           ConCat.Misc                         (sqr, result, cond)
 import           ConCat.Orphans                      (fstF, sndF)
-import Utils hiding (R)
+import Utils.Utils hiding (R)
 
 
 -- | Split a list of samples into training/testing sets.

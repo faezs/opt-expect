@@ -9,7 +9,7 @@
 -- | This module requires all of its exports to be INLINEd so that we can
 -- preserve referential transparency in any tests which attempt to use their
 -- definitions for 'toCCC'.
-module CircMisc where
+module Utils.CircMisc where
 
 import Prelude
 

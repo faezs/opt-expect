@@ -27,7 +27,7 @@ Maintainer  : capn.freako@gmail.com
 Stability   : experimental
 Portability : ?
 -}
-module ConCat.Classifiable where
+module Utils.Classifiable where
 
 import           GHC.TypeLits
 import           Control.Arrow               ((&&&), second)
