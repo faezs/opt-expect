@@ -48,6 +48,9 @@ dependencies:
 - perfect-vector-shuffle
 - fusion-plugin
 - algebraic-graphs
+- transformers
+- attoparsec
+- text
 
 library:
   source-dirs: src

@@ -22,10 +22,11 @@ import ConCat.Rebox ()
 import ConCat.Misc
 import ConCat.Deep
 
-import CartPole
-import PPO
-import Utils
-import Env
+import Env.CartPole
+import RL.PPO
+import Utils.Utils
+import Env.Env
+import Env.MonadEnv
 
 import Streamly
 import qualified Streamly.Prelude as S
@@ -69,6 +70,8 @@ eps :: Int -> PType 4 16 2 -> PType 4 16 1 -> SerialT MonadEnv (CPTrans)
 eps = \n pi vi -> 
   (\s -> runEpisode @MonadEnv stepCP (catAgent pi) (wrapVF valueFn vi) s) =<< (S.replicateM n initCP)
 {-# INLINE eps #-}
+
+preprocTx = undefined
 
 --actor :: (KnownNat3 i h o) => Unop (PType i h o) 
 {--

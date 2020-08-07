@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d52d21eda9e68eebc1484d3a791673b4b67e03c9d8ad29d42b87731357a969f7
+-- hash: 1b39c45996d863f0e0ee15daddf4d3b3446739cc6127e6392f059b4c9aa20c04
 
 name:           opt-expect
 version:        0.1.0.0
@@ -29,21 +29,24 @@ source-repository head
 
 library
   exposed-modules:
-      Adam
-      CartPole
-      CircMisc
-      DDQN
-      Env
-      GATs
-      Lib
-      MLUtils
-      Policy
-      PPO
-      RL
+      Env.CartPole
+      Env.Env
+      Env.MonadEnv
+      Networks.Attention
+      Networks.GATs
+      Optimizers.Adam
+      Prob.Bijector
+      Prob.Policy
+      Prob.SampleProb
+      RL.MDP
+      RL.POMDP
+      RL.PPO
       SCG.Graph
-      Test
-      TestE
-      Utils
+      SCG.SCG
+      Utils.CircMisc
+      Utils.Classifiable
+      Utils.MLUtils
+      Utils.Utils
   other-modules:
       Paths_opt_expect
   hs-source-dirs:
@@ -52,6 +55,7 @@ library
       MonadRandom
     , adjunctions
     , algebraic-graphs
+    , attoparsec
     , base >=4.7 && <5
     , comonad
     , concat-classes
@@ -73,6 +77,8 @@ library
     , random-shuffle
     , stm
     , streamly >=0.7.1
+    , text
+    , transformers
     , transformers-base
     , vector
     , vector-sized
@@ -90,6 +96,7 @@ executable opt-expect-exe
       MonadRandom
     , adjunctions
     , algebraic-graphs
+    , attoparsec
     , base >=4.7 && <5
     , comonad
     , concat-classes
@@ -112,6 +119,8 @@ executable opt-expect-exe
     , random-shuffle
     , stm
     , streamly >=0.7.1
+    , text
+    , transformers
     , transformers-base
     , vector
     , vector-sized
@@ -124,6 +133,8 @@ test-suite opt-expect-test
   other-modules:
       AdamSpec
       CPSpec
+      DMonadicFn
+      Test
       Paths_opt_expect
   hs-source-dirs:
       test
@@ -133,6 +144,7 @@ test-suite opt-expect-test
     , QuickCheck
     , adjunctions
     , algebraic-graphs
+    , attoparsec
     , base >=4.7 && <5
     , checkers
     , comonad
@@ -158,6 +170,8 @@ test-suite opt-expect-test
     , random-shuffle
     , stm
     , streamly >=0.7.1
+    , text
+    , transformers
     , transformers-base
     , vector
     , vector-sized
