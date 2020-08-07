@@ -14,7 +14,7 @@
 {-# LANGUAGE MonoLocalBinds #-}
 {-# OPTIONS_GHC -fplugin-opt=ConCat.Plugin:showResiduals #-}
 -- {-# OPTIONS_GHC -fplugin-opt=ConCat.Plugin:trace #-}
-module PPO where
+module RL.PPO where
 
 import Prelude hiding (zip, zipWith, length)
 import Data.Foldable
@@ -38,11 +38,11 @@ import GHC.TypeLits
 import Data.Proxy
 import Data.Finite
 
-import Utils hiding (R)
+import Utils.Utils hiding (R)
 import Control.Monad.Bayes.Class (MonadSample)
-import Policy
-import Env
-import Adam
+import Prob.Policy
+import Env.Env
+import Optimizers.Adam
 
 import Streamly
 import qualified Streamly.Prelude as S
