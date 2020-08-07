@@ -9,7 +9,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module GATs where
+module Networks.GATs where
 
 import Prelude hiding (zip, zipWith, id, (.), uncurry, curry)
 import ConCat.Category
@@ -29,7 +29,7 @@ import Data.Bifunctor
 
 import Algebra.Graph.Labelled as G
 import Algebra.Graph.ToGraph
-import Utils hiding (R)
+import Utils.Utils hiding (R)
 import ConCat.Misc
 import Data.Key
 import qualified Data.Set as S

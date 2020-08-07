@@ -8,7 +8,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module ConCat.Attention where
+module Networks.Attention where
 
 import Prelude hiding ((.), id, curry, uncurry, zip)
 import ConCat.Misc
