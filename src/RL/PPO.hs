@@ -111,20 +111,26 @@ ppoBatch lr eta pi = FL.Fold step begin end
     begin :: m (PType i h o, PType i h o)
     begin = pure $ (pi, pi)
     step :: (PType i h o, PType i h o) -> V n (Transition s a R) -> m (PType i h o, PType i h o)
-    step (piOld, piNew) tx = pure $ (piNew, piNew ^+^ (lr *^ ppoGrad eta tx piOld piNew))
+    step policies@(_, piNew) tx = pure $ (piNew, piNew ^+^ (lr *^ ppoGrad eta tx policies))
     end :: (PType i h o, PType i h o) -> m (PType i h o, PType i h o)
     end v = (return @m) v
 {-# INLINE ppoBatch #-}
 
-ppoGrad :: forall n i h o s a. (RLCon s a i h o, KnownNat n) => R -> V n (Transition s a R) -> PType i h o -> Unop (PType i h o)
-ppoGrad = \eta trajectories piOld pi -> gradR (\p ->
-                                                 (normSqr $
-                                                  ((\Transition{..} ->  ppoLoss eta (toV s_t) (toV a_t) advantage p pi)
-                                                   <$> (trajectories)))) piOld
+ppoGrad :: forall n i h o s a. (RLCon s a i h o, KnownNat n) => R -> V n (Transition s a R) -> (PType i h o, PType i h o) -> PType i h o
+ppoGrad = \eta trajectories (piOld, pi) -> expectation $ (\Transition{..} ->
+                                                     gradR (\p ->
+                                                               (ppoLoss eta (toV s_t) (toV a_t) advantage p piOld)) pi)
+                                           <$> trajectories
 {-# INLINE ppoGrad #-}
 
+p' :: (V 4 R, V 2 R, R) -> (PType 4 16 2, PType 4 16 2) -> PType 4 16 2
+p' = \(s, a, r) (p, p') -> gradR (\p' -> ppoLoss 0.2 s a r p p') p'
+{-# INLINE p' #-}
+
+--ppoGradient = ppoLoss
+
 ppoLoss :: forall i h o s a. (KnownNat3 i h o) => R -> V i R -> V o R -> R -> PType i h o -> PType i h o -> R
-ppoLoss = \ eta state action advantage thetaOld theta -> (min ((policyRatio theta thetaOld state action)) (g eta advantage))
+ppoLoss = \ eta state action advantage thetaOld theta -> (policyRatio theta thetaOld state action) --`min` (g eta advantage)
 {-# INLINE ppoLoss #-}
 
 policyRatio :: (KnownNat3 i h o) => PType i h o -> PType i h o -> V i R -> V o R -> R
