@@ -39,8 +39,7 @@ class (MonadSample m) => Policy m (p :: Nat -> Nat -> Nat -> *) s a r where
   value :: p i h o -> s -> r
 --}
 
--- | Draw from a discrete distribution using a sequence of draws from
--- Bernoulli.
+-- | Draw from a discrete distribution using a sequence of draws from Bernoulli.
 fromPMF' :: MonadSample m => Int -> (Int -> Double) -> m Int
 fromPMF' (!n) !p = f 0 1
   where
@@ -49,7 +48,6 @@ fromPMF' (!n) !p = f 0 1
       let q = p i
       when (q < 0 || q > 1) $ error "fromPMF: invalid probability value"
       b <- bernoulli (q / r)
-      let n' = mod (i + 1) n
       if b then pure i else if (i + 1 >= n) then pure i else f (i + 1) (r - q)
 {-# INLINE fromPMF' #-}
 
