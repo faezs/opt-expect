@@ -1,6 +1,6 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts #-}
+--{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds #-}
@@ -8,7 +8,7 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fplugin-opt=ConCat.Plugin:showResiduals #-}
 
-{-# OPTIONS_GHC -fplugin-opt=ConCat.Plugin:trace #-}
+--{-# OPTIONS_GHC -fplugin-opt=ConCat.Plugin:trace #-}
 
 --{-# OPTIONS_GHC -fsimpl-tick-factor=2500 #-}
 
@@ -34,13 +34,9 @@ import qualified Streamly.Data.Fold as FL
 
 import Control.Monad.IO.Class
 import ConCat.RAD (gradR)
-import ConCat.Additive
 import qualified Data.Vector.Sized as VS
 import Data.Maybe (fromJust)
-import GHC.TypeLits
-import Data.Key
-import Data.Proxy
-import qualified Data.Vector.Sized as VS
+
 
 -- #define PROFILE
 
@@ -55,15 +51,11 @@ reinforce = do
   let
     policyNet = (gaussInit <$> randF 1 :: PType 4 16 2)
     valueNet = (randF 1 :: PType 4 16 1)
-  traj <- sampleIOE $ S.head $ (minibatch @20) (eps 10 policyNet valueNet)
-  let
-   p'' = p' policyNet (preprocTx . VS.head . fromJust $ traj)
-  print p''
+  --traj <- sampleIOE $ S.head $ (minibatch @20) (eps 10 policyNet valueNet)
+  p'' <- sampleIOE $ ppoUpdate @10 0.001 0.1 (eps 10 policyNet valueNet) policyNet
+  print (p'' ^-^ policyNet)
   return ()
 {-# INLINE reinforce #-}
-
-p' = \p (s, a, r) -> gradR (\p' -> ppoLoss 0.2 s a r p') p
-{-# INLINE p' #-}
 
 
 eps :: Int -> PType 4 16 2 -> PType 4 16 1 -> SerialT MonadEnv (CPTrans)
@@ -71,9 +63,11 @@ eps = \n pi vi ->
   (\s -> runEpisode @MonadEnv stepCP (catAgent pi) (wrapVF valueFn vi) s) =<< (S.replicateM n initCP)
 {-# INLINE eps #-}
 
-preprocTx = undefined
 
---actor :: (KnownNat3 i h o) => Unop (PType i h o) 
+preprocTx :: CPTrans -> (V 4 R, V 2 R, R) 
+preprocTx (Transition{ s_tn, a_t, advantage}) = (toV s_tn, toV a_t, advantage) 
+
+
 {--
 #ifdef PROFILE
 pgFold pf = minibatchLearn @MonadEnv @40 @CPState @CPAct @4 @16 @2 20 (\b px -> policyGradient 1e-2 b px) pf --policyGradient 1e-2 b px) pf
