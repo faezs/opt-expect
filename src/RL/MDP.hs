@@ -15,7 +15,7 @@ import Control.Applicative
 import Control.Monad.Bayes.Class
 import Control.Monad.Trans.State.Strict hiding (get, modify', put, state)
 import Control.Monad.State.Class
-import Control.Monad.Trans.Class
+import Control.Monad.Trans.Class ()
 
 
 import ConCat.RAD (gradR, andDerR, andGrad2R)
@@ -95,7 +95,7 @@ applyP (params, policy) (SMDP {actS}) = MP { step = \ s -> actS s (policy params
 
 
 -- EXAMPLE
-
+{--
 demandForecast :: MonadSample m => m Double
 demandForecast = normal 100 50
 
@@ -138,6 +138,7 @@ storeSMDP demand = SMDP {
 
 a :: Policy Double Double
 a = const 4
+--}
 
 runMDP :: MarkovDecisionProcess MonadEnv s a -> Policy s a -> MarkovRewardProcess MonadEnv s
 runMDP = flip apply  
