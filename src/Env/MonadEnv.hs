@@ -8,7 +8,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Env.MonadEnv (MonadEnv(..), sampleIOE, runStream) where
+module Env.MonadEnv (MonadEnv(..), sampleIOE, sampleStream) where
 
 import Control.Monad.Bayes.Class
 import Control.Monad.Bayes.Sampler
@@ -42,5 +42,5 @@ deriving instance MonadSample MonadEnv
 sampleIOE :: (forall a. MonadEnv a -> IO a)
 sampleIOE = sampleIO . runMonadEnv
 
-runStream :: (IsStream t) => (forall a. t MonadEnv a -> t IO a)
-runStream = hoist sampleIOE
+sampleStream :: (IsStream t) => (forall a. t MonadEnv a -> t IO a)
+sampleStream = hoist sampleIOE
