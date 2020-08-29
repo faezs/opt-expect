@@ -119,18 +119,18 @@ ppoBatch lr eta pi = FL.Fold step begin end
 ppoGrad :: forall n i h o s a. (RLCon s a i h o, KnownNat n) => R -> V n (Transition s a R) -> (PType i h o, PType i h o) -> PType i h o
 ppoGrad = \eta trajectories (piOld, pi) -> expectation $ (\Transition{..} ->
                                                      gradR (\p ->
-                                                               (ppoLoss eta (toV s_t) (toV a_t) advantage p piOld)) pi)
+                                                               (ppoLoss eta (toV s_t) (toV a_t) rw p piOld)) pi)
                                            <$> trajectories
 {-# INLINE ppoGrad #-}
 
-p' :: (V 4 R, V 2 R, R) -> (PType 4 16 2, PType 4 16 2) -> PType 4 16 2
-p' = \(s, a, r) (p, p') -> gradR (\p' -> ppoLoss 0.2 s a r p p') p'
-{-# INLINE p' #-}
+--p' :: (V 4 R, V 2 R, R) -> (PType 4 16 2, PType 4 16 2) -> PType 4 16 2
+--p' = \(s, a, r) (p, p') -> gradR (\p' -> ppoLoss 0.2 s a r p p') p'
+--{-# INLINE p' #-}
 
 --ppoGradient = ppoLoss
 
 ppoLoss :: forall i h o s a. (KnownNat3 i h o) => R -> V i R -> V o R -> R -> PType i h o -> PType i h o -> R
-ppoLoss = \ eta state action advantage thetaOld theta -> (policyRatio theta thetaOld state action) --`min` (g eta advantage)
+ppoLoss = \ eta state action adv thetaOld theta -> (policyRatio theta thetaOld state action) `min` (g eta adv)
 {-# INLINE ppoLoss #-}
 
 policyRatio :: (KnownNat3 i h o) => PType i h o -> PType i h o -> V i R -> V o R -> R
