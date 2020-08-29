@@ -31,6 +31,7 @@ import Env.MonadEnv
 import Streamly
 import qualified Streamly.Prelude as S
 import qualified Streamly.Data.Fold as FL
+import qualified Streamly.Internal.Data.Fold as FL
 
 import Control.Monad.IO.Class
 import ConCat.RAD (gradR)
@@ -51,16 +52,20 @@ reinforce = do
   let
     policyNet = (gaussInit <$> randF 1 :: PType 4 16 2)
     valueNet = (randF 1 :: PType 4 16 1)
-  --traj <- sampleIOE $ S.head $ (minibatch @20) (eps 10 policyNet valueNet)
-  p'' <- sampleIOE $ ppoUpdate @10 0.001 0.1 (eps 10 policyNet valueNet) policyNet
-  print (p'' ^-^ policyNet)
+  p'' <- sampleIOE $ S.toList $ S.iterateM (\(policy, vf) -> do
+                                               let txs = (eps 30 policy vf)
+                                               p' <- ppoUpdate @30 0.001 (0.99*0.97) txs policy
+                                               vf' <- S.foldl' (\vf tx -> valueFnLearn @30 valueFn 0.99 tx valueNet) vf (minibatch txs)
+                                               return (p', vf')
+                                           ) (pure (policyNet, valueNet))
+  mapM (\p -> print $ (fst p) ^-^ policyNet) p''
   return ()
 {-# INLINE reinforce #-}
 
 
 eps :: Int -> PType 4 16 2 -> PType 4 16 1 -> SerialT MonadEnv (CPTrans)
-eps = \n pi vi -> 
-  (\s -> runEpisode @MonadEnv stepCP (catAgent pi) (wrapVF valueFn vi) s) =<< (S.replicateM n initCP)
+eps = \n pi vi -> S.tap (FL.mapM (liftIO . print) (FL.lmap rw FL.maximum))
+  ((\s -> runEpisode @MonadEnv stepCP (catAgent pi) (wrapVF valueFn vi) s) =<< (S.replicateM n initCP))
 {-# INLINE eps #-}
 
 
