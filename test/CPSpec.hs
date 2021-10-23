@@ -5,7 +5,7 @@ import Test.QuickCheck.Classes
 import Test.QuickCheck.Checkers
 import Test.QuickCheck
 
-import CartPole
+import Env.CartPole
 
 spec :: Spec
 spec = do

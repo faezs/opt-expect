@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.2.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: beb8d490f5eeb664d0ceabb0a42d4d05f6b09bcb79969888ee19e939ae80cc60
+-- hash: c22c090c4ac03908c10c9b2cc9a68b5a9630f7f540d0a7c38fe106df96412a2c
 
 name:           opt-expect
 version:        0.1.0.0
@@ -138,7 +138,6 @@ test-suite opt-expect-test
       DMonadicFn
       MDP
       RL
-      Test
       Paths_opt_expect
   hs-source-dirs:
       test

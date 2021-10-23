@@ -10,9 +10,9 @@ import Test.QuickCheck.Checkers
 import Test.QuickCheck.Utils
 import Test.QuickCheck
 
-import Adam
+import Optimizers.Adam
 import ConCat.Deep
-import Utils
+import Utils.Utils
 import ConCat.Misc
 import GHC.Generics hiding (R)
 import ConCat.Additive
