@@ -106,7 +106,7 @@ ppoUpdate lr eta trajectories pi = do
 {-# INLINE ppoUpdate #-}
 
 ppoBatch :: forall n m s a r i h o. RLFold n m s a r i h o => R -> R -> PType i h o -> FL.Fold m (V n (Transition s a R)) (PType i h o, PType i h o)
-ppoBatch lr eta pi = FL.Fold step begin end
+ppoBatch lr eta pi = FL.foldlM' step begin
   where
     begin :: m (PType i h o, PType i h o)
     begin = pure $ (pi, pi)
@@ -152,7 +152,7 @@ policyGradient = \lr trajectories pol params -> params ^+^ (lr *^ ((gradLogProbE
 
 type ParamCon p = (Functor p, Zip p, Additive1 p)
 
--- Expectation over the grad log prob for all trajectories of an episode
+-- Expectation over the grad log prob kf the advantage-normalized for all trajectories of an episode
 gradLogProbExp :: forall n i h o s a. (KnownNat n, HasV s i, HasV a o, KnownNat h) => V n (Transition s a R) -> (Unop (PType i h o))
 gradLogProbExp = \trajectories policyParams -> expectation $ (\(Transition{..}) -> gradLogProb advantage (toV s_t) (toV a_t) policyParams) <$> trajectories
 {-# INLINE gradLogProbExp #-}
@@ -173,6 +173,7 @@ prob = \ps st act -> (((policy @i @h @o ps) st) <.> act)
 {-# INLINE prob#-}
 
 
+-- Mean over an additive functor
 expectation :: (Zip f, Functor f, Foldable f, Additive a, Num a, Functor g, Additive (g a), Fractional a) => f (g a) -> g a
 expectation fs = (sumA $ fs) ^/ (fromIntegral . length $ fs)
 {-# INLINE expectation #-}

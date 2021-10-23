@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1b39c45996d863f0e0ee15daddf4d3b3446739cc6127e6392f059b4c9aa20c04
+-- hash: beb8d490f5eeb664d0ceabb0a42d4d05f6b09bcb79969888ee19e939ae80cc60
 
 name:           opt-expect
 version:        0.1.0.0
@@ -37,8 +37,10 @@ library
       Optimizers.Adam
       Prob.Bijector
       Prob.Policy
+      Prob.Prob
       Prob.SampleProb
       RL.MDP
+      RL.MDPLearn
       RL.POMDP
       RL.PPO
       SCG.Graph
@@ -134,6 +136,8 @@ test-suite opt-expect-test
       AdamSpec
       CPSpec
       DMonadicFn
+      MDP
+      RL
       Test
       Paths_opt_expect
   hs-source-dirs:

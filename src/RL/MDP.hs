@@ -11,20 +11,15 @@ module RL.MDP where
 import GHC.Generics hiding (R)
 
 import Data.Monoid
-import Control.Applicative
-import Control.Monad.Bayes.Class
+import Control.Monad.Bayes.Class ()
 import Control.Monad.Trans.State.Strict hiding (get, modify', put, state)
 import Control.Monad.State.Class
-import Control.Monad.Trans.Class ()
+import Control.Monad.Trans.Class () --(lift)
 
 
-import ConCat.RAD (gradR, andDerR, andGrad2R)
-import ConCat.Misc
 
 import Streamly
 import qualified Streamly.Prelude as S
-
-import Env.MonadEnv
 
 
 -- $ A Markov process takes place in a probability monad,
@@ -39,7 +34,7 @@ simulate :: forall t m s. (IsStream t, MonadAsync m)
   => MarkovProcess m s
   -> s
   -> t m s
-simulate process s = S.iterateM (step process) (return s)
+simulate (MP {step}) s = S.iterateM step (pure s)
 
 
 ----------------Dealing With Rewards ----------------------------------
@@ -52,13 +47,14 @@ type Reward = Sum Double
 type MarkovRewardProcess m s = MarkovProcess (StateT Reward m) s
 
 
+
 -- $ This is how we inject the reward at each step 
 reward :: (MonadState Reward m) => Double -> m ()
 reward x =  modify' (<> Sum x)
 
 --------------------- MDP ----------------------------------
 -- $ an MDP takes a state and an action and returns the next state and reward 
-data MarkovDecisionProcess m s a = MDP { act :: s -> a -> StateT Reward m s }
+data MarkovDecisionProcess m s a = MDP { act :: s -> (s -> a) -> StateT Reward m s }
 
 
 -- $ A function from state to action
@@ -74,24 +70,8 @@ type Policy s a = s -> a
 
 -- $ MDP + Policy = MRP
 apply :: forall m s a. Policy s a -> MarkovDecisionProcess m s a -> MarkovRewardProcess m s
-apply policy (MDP{ act }) = MP { step = \ s -> act s (policy s) } 
+apply policy (MDP{ act }) = MP { step = \ s -> act s policy } 
 
-
-
-data StochasticMDP m s a = SMDP { actS :: s -> m a -> StateT Reward m s }
-
-type StochasticPolicy m s a = s -> m a
-
-applyS :: forall m s a. StochasticPolicy m s a -> StochasticMDP m s a -> MarkovRewardProcess m s
-applyS stocPol (SMDP { actS }) = MP { step = \ s -> actS s (stocPol s) }
-
-
-data ParameterizedMDP p m s a = PMDP { actP :: s -> m a -> StateT Reward m s }
-
-type ParameterizedPolicy p m s a = (p, p -> s -> m a)
-
-applyP :: forall p m s a. ParameterizedPolicy p m s a -> StochasticMDP m s a -> MarkovRewardProcess m s
-applyP (params, policy) (SMDP {actS}) = MP { step = \ s -> actS s (policy params s) }
 
 
 -- EXAMPLE
@@ -110,9 +90,10 @@ store demand = MP {
 
 storeMDP :: (Monad m) => m Double -> MarkovDecisionProcess m Double Double
 storeMDP demand = MDP {
-  act = \ inventory ordered -> do
-      reward (-1 * inventory)
-      reward (-4 * ordered)
+  act = \ inventory orderer -> do
+      let ordered = orderer inventory
+      reward $ (-1) * inventory
+      reward $ (-4) * ordered
 
       demanded <- lift demand
       let sold = min demanded inventory
@@ -135,16 +116,4 @@ storeSMDP demand = SMDP {
       reward (sold * 6 - missed * 12)
       pure (inventory - sold + ordered)
 }
-
-a :: Policy Double Double
-a = const 4
 --}
-
-runMDP :: MarkovDecisionProcess MonadEnv s a -> Policy s a -> MarkovRewardProcess MonadEnv s
-runMDP = flip apply  
-
-runSMDP :: StochasticMDP MonadEnv s a -> StochasticPolicy MonadEnv s a -> MarkovRewardProcess MonadEnv s
-runSMDP = flip applyS
-
-runPSMDP :: StochasticMDP MonadEnv s a -> ParameterizedPolicy p MonadEnv s a -> MarkovRewardProcess MonadEnv s
-runPSMDP = flip applyP

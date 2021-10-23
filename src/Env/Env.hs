@@ -48,12 +48,13 @@ import Control.Monad.Bayes.Class
 import Control.Monad.Bayes.Sampler
 
 import qualified Streamly.Prelude as S
-import qualified Streamly.Internal.Prelude as S
+import qualified Streamly.Internal.Data.Stream.IsStream as S
+--import qualified Streamly.Internal.Prelude as S
 import Streamly
 import qualified Streamly.Data.Fold as FL
 import qualified Streamly.Internal.Data.Fold as FL
 import qualified Streamly.Internal.Data.Unfold as UF
-import qualified Streamly.Internal.Data.Unfold.Types as UF
+-- import qualified Streamly.Internal.Data.Unfold.Types as UF
 import qualified Streamly.Internal.Data.Stream.StreamD.Type as STy
 import qualified Data.Vector.Sized as VS
 
@@ -115,13 +116,18 @@ advantageF :: forall t m s a r. (IsStream t, EnvCon m s a r) => (s -> r) -> r ->
 advantageF vf lambda gamma txs = S.postscan advFold $ S.zipWith (,) (S.enumerateFrom (0 :: Int)) txs
   where
     advFold :: FL.Fold m (Int, Transition s a r) (Transition s a r)
-    advFold = FL.Fold accAdv (pure (def @(Transition s a r))) (pure)
+    advFold = FL.mkFoldM accAdv st pure
+    st :: m (FL.Step (Transition s a r) (Transition s a r))
+    st = pure (FL.Partial def)
+    accAdv :: Transition s a r
+           -> (Int, Transition s a r)
+           -> m (FL.Step (Transition s a r) (Transition s a r))
     accAdv t0@Transition{advantage=advP, rw=rp} (i, t1@Transition{..}) =
-      pure $ t1{ rw = rp + rw
-               , advantage = advP + (lambda * gamma ^ i * oneStepTDResidual)
-               , tdRes = oneStepTDResidual
-               , stateValue = v_t
-               }
+      pure $ FL.Partial t1{ rw = rp + rw
+                          , advantage = advP + (lambda * gamma ^ i * oneStepTDResidual)
+                          , tdRes = oneStepTDResidual
+                          , stateValue = v_t
+                          }
       where
         v_t = vf s_t
         oneStepTDResidual = rw + (gamma * vf s_tn) - (v_t)
@@ -152,7 +158,7 @@ runEpisode ::
 runEpisode stepFn agent valueFn initS = let
   episode :: SerialT m (Transition s a r)
   episode = S.takeWhile (\tx -> not . done $ tx)
-            $ (S.evalStateT initS (S.mapM (\_ -> stepFn agent) $ S.enumerateFromTo (1 :: Int) 1000))
+            $ (S.evalStateT (pure initS) (S.mapM (\_ -> stepFn agent) $ S.enumerateFromTo (1 :: Int) 1000))
   epWithAdvantage = (advantageF valueFn 0.99 0.2) episode 
   in epWithAdvantage
 --{-# INLINE runEpisode #-}
@@ -168,7 +174,7 @@ unfoldEpisode ::
   -> (s -> m a)
   -> s
   -> UF.Unfold m s (Transition s a r)
-unfoldEpisode stepFn agent initS = UF.Unfold tn (stepFn agent)
+unfoldEpisode stepFn agent initS = UF.mkUnfoldM tn (stepFn agent)
   where
     tn :: (Transition s a r -> m (STy.Step (Transition s a r) (Transition s a r)))
     tn t@Transition{..} = return $ if not done then STy.Yield t t else STy.Stop    
@@ -241,13 +247,15 @@ computeStats = foldl (\b@BatchStatistics{..} t@Transition{..} -> b{batchReward =
                                                                   , batchAdvantage = batchAdvantage + advantage
                                                                   , batchSVerror = batchSVerror + stateValue
                                                                   }) mempty
+{-# INLINE computeStats #-}
+
 
 minibatchStatistics :: forall n m s a. (MonadIO m, KnownNat n) => FL.Fold m (V n (Transition s a R)) ()
-minibatchStatistics = FL.Fold (step) begin end
+minibatchStatistics = FL.mapM (end) $ FL.foldlM' step begin
   where
     begin = pure mempty
     step :: BatchStatistics -> (V n (Transition s a R)) -> m BatchStatistics
-    step b = return . computeStats
+    step b = pure . computeStats
     end BatchStatistics{..} = (liftIO . putStrLn $
                         "average reward: " <> (show $ round $ batchReward / l)
                         `vsep` " average stateValue: " <> (show $ batchSVerror / l) 
@@ -256,7 +264,7 @@ minibatchStatistics = FL.Fold (step) begin end
       where
         vsep a b = a <> "\n" <> b
         l = (fromIntegral $ natVal (Proxy @n))
---{-# INLINE minibatchStatistics #-}
+{-# INLINE minibatchStatistics #-}
 
 
 wrapVF :: (HasV s i, KnownNat h) => (PType i h 1 -> V i R -> V 1 R) -> (PType i h 1 -> s -> R)
