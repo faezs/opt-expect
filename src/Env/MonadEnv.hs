@@ -11,7 +11,7 @@
 module Env.MonadEnv (MonadEnv(..), sampleIOE, sampleStream) where
 
 import Control.Monad.Bayes.Class
-import Control.Monad.Bayes.Sampler
+import Control.Monad.Bayes.Sampler.Strict
 import Control.Monad.Base
 import Control.Monad.Trans.Control
 import Control.Monad.Catch
@@ -37,7 +37,7 @@ instance MonadBaseControl IO MonadEnv where
   liftBaseWith f = liftIO $ liftBaseWith @IO @IO (\run -> f (run . sampleIO . runMonadEnv)) 
   restoreM a = liftIO $ restoreM @IO @IO a
 
-deriving instance MonadSample MonadEnv
+deriving instance MonadDistribution MonadEnv
 
 sampleIOE :: (forall a. MonadEnv a -> IO a)
 sampleIOE = sampleIO . runMonadEnv
