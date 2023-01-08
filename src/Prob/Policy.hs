@@ -40,7 +40,7 @@ class (MonadSample m) => Policy m (p :: Nat -> Nat -> Nat -> *) s a r where
 --}
 
 -- | Draw from a discrete distribution using a sequence of draws from Bernoulli.
-fromPMF' :: MonadSample m => Int -> (Int -> Double) -> m Int
+fromPMF' :: MonadDistribution m => Int -> (Int -> Double) -> m Int
 fromPMF' (!n) !p = f 0 1
   where
     f !i !r = do
@@ -51,11 +51,11 @@ fromPMF' (!n) !p = f 0 1
       if b then pure i else if (i + 1 >= n) then pure i else f (i + 1) (r - q)
 {-# INLINE fromPMF' #-}
 
-categorical' :: (MonadSample m, KnownNat n) => V n R -> m Int
+categorical' :: (MonadDistribution m, KnownNat n) => V n R -> m Int
 categorical' (!ps) = fromPMF' (VS.length ps) $! (VS.unsafeIndex ps)
 {-# INLINE categorical' #-}
 
-sampleCat :: (MonadSample m, KnownNat n, Enum a) => V n R -> m a
+sampleCat :: (MonadDistribution m, KnownNat n, Enum a) => V n R -> m a
 sampleCat = \cs -> toEnum <$> (categorical' $! cs)
 {-# INLINE sampleCat #-}
 
@@ -63,7 +63,7 @@ logProbCat :: (Indexable f) => f R -> Key f -> R
 logProbCat v i = log $ index v i
 {-# INLINE logProbCat#-}
 
-sampleGaussian :: (MonadSample m, Applicative f, Traversable f) => f R -> f R -> m (f R)
+sampleGaussian :: (MonadDistribution m, Applicative f, Traversable f) => f R -> f R -> m (f R)
 sampleGaussian mu std = sequenceA $ normal <$> mu <*> std
 {-# INLINE sampleGaussian #-}
 
@@ -74,7 +74,7 @@ logProbGaussian mu std sample = extract <$> (normalPdf <$> mu <*> std <*> sample
 
 gaussianPolicy ::
   forall m p a b.
-  ( MonadSample m
+  ( MonadDistribution m
   , Applicative a
   , Traversable a
   , Applicative b

@@ -17,7 +17,7 @@
 #
 # resolver: ./custom-snapshot.yaml
 # resolver: https://example.com/snapshots/2018-01-01.yaml
-resolver: lts-14.10
+resolver: lts-18.19
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -39,7 +39,7 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps:
   - git: git@github.com:conal/concat.git
-    commit: 5dee6ff552c3d1a4f154631c2ab11b2c687dd665
+    commit: 8210dc3f90c70af59d321a225eb451a063607bb0
     subdirs:
       - inline
       - plugin
@@ -50,20 +50,26 @@ extra-deps:
       - graphics
       - examples
     # nix-sha256: 1a3z21n0ispcc4irggkwsclfbv87z1gb52lfafwx09n8bszr8c19
-  - git: git@github.com:tweag/monad-bayes.git
-    commit: 10a5ea4d6f1eb72ff4e2a5978485e93a48db061d
-    subdirs:
-      - .
+  #  git: git@github.com:tweag/monad-bayes.git
+  #  commit: 10a5ea4d6f1eb72ff4e2a5978485e93a48db061d
+  #  subdirs:
+  #    - .
     # nix-sha256 1ndbbg15z168ivh04dqyx42s1c27vd5srqb6khq1p65bkmzfnbzb
   - git: git@github.com:composewell/streamly.git
     commit: 4f629b8cb36bd03b480edc08b77c9a0187ce2206
     subdirs:
       - .
     # nix-sha256: 1ag6lqr74c1ml0vmai7a1b28dyf149pv3mhpg06kp27sawl71sy2
-  - fusion-plugin-0.1.1@sha256:0f0a6fc5770619ef56d3dc64bc53f59f08f33c7bb6fe9f6b7e548577d97340ef,1890
+  - fusion-plugin-0.2.5
   - fusion-plugin-types-0.1.0
   - perfect-vector-shuffle-0.1.1.1@sha256:e05f719d3eb7eb680d6b94af59a3771e4ea6f9aa4e3cfb30e3048c2ac9520ee3,4023
-
+  - monad-bayes-1.1.0
+  - brick-1.5@sha256:e9f1785065a92bc99cd89c4076ee740b80bb4254f6b25346dff82e0172e63644,17826
+  - histogram-fill-0.9.1.0@sha256:e6233fe467a5a68a2f913e8b31a78e2db81de5c1a8f282be77757ccc040305a8,1928
+  - random-1.2.1
+  - math-functions-0.3.4.2
+  - linear-1.22
+  - text-zipper-0.12
 #  - git: git@github.com:hasktorch/hasktorch.git
 #    commit: 61eccc61ddf1b6334bfd6e8344620006174b1bef
 #    subdirs:
@@ -94,3 +100,5 @@ extra-deps:
 #
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
+
+allow-newer: true

@@ -10,7 +10,7 @@ module Env.CartPole where
 import ConCat.Misc
 import Control.Monad.State.Lazy
 import Control.Monad.Bayes.Class
-import Control.Monad.Bayes.Sampler
+import Control.Monad.Bayes.Sampler.Strict
 
 import Control.Arrow
 import Utils.Utils
@@ -152,7 +152,7 @@ dynamicsCP CPConf{..} f s@CPState{..} = CPState
         sinTh = sin theta
 
 
-stepCP' :: forall m. (MonadSample m) => CPConf -> (CPState -> m CPAct) -> EnvState m CPState CPTrans
+stepCP' :: forall m. (MonadDistribution m) => CPConf -> (CPState -> m CPAct) -> EnvState m CPState CPTrans
 stepCP' c@CPConf{..} actor = do
   st <- get
   act <- lift $ actor st
@@ -174,14 +174,14 @@ stepCP' c@CPConf{..} actor = do
       || theta > (toRadians thetaThreshold)
 
 
-stepCP :: forall m. (MonadSample m) => (CPState -> m CPAct) -> EnvState m CPState CPTrans
+stepCP :: forall m. (MonadDistribution m) => (CPState -> m CPAct) -> EnvState m CPState CPTrans
 stepCP = stepCP' cartPoleDef
 
 runCPEpisode ::  CPState -> (CPState -> MonadEnv CPAct) -> (CPState -> R) -> SerialT MonadEnv CPTrans
 runCPEpisode i a v = runEpisode (stepCP) a v i
 
 
-initCP :: (MonadSample m) => m CPState
+initCP :: (MonadDistribution m) => m CPState
 initCP = CPState <$> dist <*> dist <*> dist <*> dist
   where
     dist = uniform (-0.5) 0.5

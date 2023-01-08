@@ -45,7 +45,7 @@ import ConCat.Deep
 
 
 import Control.Monad.Bayes.Class
-import Control.Monad.Bayes.Sampler
+import Control.Monad.Bayes.Sampler.Strict
 
 import qualified Streamly.Prelude as S
 import qualified Streamly.Internal.Data.Stream.IsStream as S
@@ -70,7 +70,7 @@ import Control.Monad.Catch
 import Env.MonadEnv
 
 
-type EnvState m s r = (MonadSample m) => StateT s m r
+type EnvState m s r = (MonadDistribution m) => StateT s m r
 
 type RLUpdate n i h o s a = V n (Transition s a R) -> Unop (PType i h o)
 
@@ -95,7 +95,7 @@ data Transition s a r = Transition
 instance (Default s, Default a, Num r) => Default (Transition s a r) where
   def = Transition def def def 0 False 0 0 0
 
-type EnvCon m s a r = (MonadSample m, MonadAsync m, Default s, Default a, Num r, Fractional r) 
+type EnvCon m s a r = (MonadDistribution m, MonadAsync m, Default s, Default a, Num r, Fractional r)
 
 {--
 totalR :: forall t m s a r. (IsStream t, EnvCon m s a r) => t m (Transition s a r) -> t m (Transition s a r)
@@ -147,7 +147,7 @@ minibatch trajectories = S.map (fromJust)
 runEpisode ::
   forall m s a r.
   ( EnvCon m s a r
-  , MonadSample m
+  , MonadDistribution m
   , MonadAsync m
   )
   => ((s -> m a) -> EnvState m s (Transition s a r))
@@ -167,7 +167,7 @@ runEpisode stepFn agent valueFn initS = let
 unfoldEpisode ::
   forall m s a r.
   ( EnvCon m s a r
-  , MonadSample m
+  , MonadDistribution m
   , MonadAsync m
   )
   => ((s -> m a) -> s -> m (Transition s a r))
@@ -182,7 +182,7 @@ unfoldEpisode stepFn agent initS = UF.mkUnfoldM tn (stepFn agent)
 runEpochs :: forall t m n s a i h o.
   ( HasV s i, HasV a o, KnownNat h
   , KnownNat n, Show s, Show a
-  , IsStream t, MonadSample m, MonadAsync m
+  , IsStream t, MonadDistribution m, MonadAsync m
   )
   => Int
   -> Int
