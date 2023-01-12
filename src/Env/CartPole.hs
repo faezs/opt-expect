@@ -178,13 +178,13 @@ stepCP :: forall m. (MonadDistribution m) => (CPState -> m CPAct) -> EnvState m 
 stepCP = stepCP' cartPoleDef
 
 runCPEpisode ::  CPState -> (CPState -> MonadEnv CPAct) -> (CPState -> R) -> SerialT MonadEnv CPTrans
-runCPEpisode i a v = runEpisode (stepCP) a v i
+runCPEpisode i a v = runEpisode stepCP a v i
 
 
 initCP :: (MonadDistribution m) => m CPState
 initCP = CPState <$> dist <*> dist <*> dist <*> dist
   where
-    dist = uniform (-0.5) 0.5
+    dist = uniform (-1) 1
 
 initCPIO :: IO CPState
 initCPIO = sampleIO initCP

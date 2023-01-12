@@ -51,6 +51,7 @@ dependencies:
 - transformers
 - attoparsec
 - text
+- newtype-generics
 
 library:
   source-dirs: src

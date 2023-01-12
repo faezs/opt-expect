@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.4.
+-- This file has been generated from package.yaml by hpack version 0.35.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c22c090c4ac03908c10c9b2cc9a68b5a9630f7f540d0a7c38fe106df96412a2c
+-- hash: 6c82f32f74a4412ac3329ee78127088fa28d974c8fb151755d68b52a3c7da420
 
 name:           opt-expect
 version:        0.1.0.0
@@ -74,6 +74,7 @@ library
     , monad-bayes
     , monad-control
     , mtl
+    , newtype-generics
     , perfect-vector-shuffle
     , random
     , random-shuffle
@@ -115,6 +116,7 @@ executable opt-expect-exe
     , monad-bayes
     , monad-control
     , mtl
+    , newtype-generics
     , opt-expect
     , perfect-vector-shuffle
     , random
@@ -166,6 +168,7 @@ test-suite opt-expect-test
     , monad-bayes
     , monad-control
     , mtl
+    , newtype-generics
     , opt-expect
     , perfect-vector-shuffle
     , quickcheck-instances
