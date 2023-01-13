@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "concat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1663500729,
+        "narHash": "sha256-VNPHrEVbuUfmTzkkCtQal1Csk+wV8ZvHpCfO3WDbCKs=",
+        "owner": "conal",
+        "repo": "concat",
+        "rev": "8210dc3f90c70af59d321a225eb451a063607bb0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "conal",
+        "repo": "concat",
+        "type": "github"
+      }
+    },
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": "nixpkgs-lib"
@@ -69,6 +85,7 @@
     },
     "root": {
       "inputs": {
+        "concat": "concat",
         "flake-parts": "flake-parts",
         "haskell-flake": "haskell-flake",
         "nixpkgs": "nixpkgs"

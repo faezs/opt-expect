@@ -3,6 +3,8 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     haskell-flake.url = "github:srid/haskell-flake";
+    concat.url = "github:conal/concat";
+    concat.flake = false;
   };
   outputs = inputs@{ self, nixpkgs, flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -20,7 +22,7 @@
           # hlsCheck.enable = true;
         };
         # haskell-flake doesn't set the default package, but you can do it here.
-        packages.default = self'.packages.example;
+        packages.default = self'.packages.opt-expect;
       };
     };
 }

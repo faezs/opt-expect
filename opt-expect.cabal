@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6c82f32f74a4412ac3329ee78127088fa28d974c8fb151755d68b52a3c7da420
+-- hash: a6f24304b36a668e37a6c5dab2df376047def4992d201eabbd9707da15798d0e
 
 name:           opt-expect
 version:        0.1.0.0
@@ -32,6 +32,7 @@ library
       Env.CartPole
       Env.Env
       Env.MonadEnv
+      Main
       Networks.Attention
       Networks.GATs
       Optimizers.Adam
