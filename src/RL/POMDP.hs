@@ -13,22 +13,32 @@ import ConCat.Synchronous
 import ConCat.Misc
 import ConCat.Category hiding (const)
 import ConCat.Free.VectorSpace
+import ConCat.Deep
+
+-- A partially observable markov decision process where the process is parameterized by neural networks
 
 
--- A partially observable markov decision process
-  
 data POMDP (m :: * -> *) s a = POMDP (s -> a -> m s) (s -> m a) s -- -> POMDP m s a)
   --Action ::  POMDP m s a
+data NPOMDP (m :: * -> *) s a = NPOMDP (s -> a -> m s) (s --+ a) s 
 
 -- A moore machine has the ability to run.
 
 type POMDPCon m s a = (Trainable m, HasV R s, HasV R a)
 
+
+
+
 -- Step Function
 step :: forall m s a. (POMDPCon m s a) => POMDP m s a -> m (POMDP m s a)
 step (POMDP sn an s) = return . (\s' -> POMDP sn an s') =<< (\a -> sn s a) =<< (an s) 
 
--- Objective
+type NeuralStep = 
+
+neuralStep :: forall m s a. (POMDPCon m s a) => 
+neuralStep = eval ()
+
+action :: (s -> m a) 
 reward :: (s -> m R) -> POMDP m s a -> m R
 reward f (POMDP _ _ s)= f s
 
